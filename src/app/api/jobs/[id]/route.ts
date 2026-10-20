@@ -19,6 +19,6 @@ export const PATCH = protectedRoute(async (request, { params }) => {
   const body = await readJson(request, Patch);
   if (isResponse(body)) return body;
 
-  const row = updateJobTracking(id!, body);
+  const row = await updateJobTracking(id!, body);
   return NextResponse.json({ ok: true, job: toJobView(row) });
 });

@@ -28,8 +28,9 @@ export function cooldownMs(): number {
 }
 
 /** Ms until a "visit" refresh is allowed again; 0 when it may run now. */
-export function cooldownRemaining(now: number = Date.now()): number {
-  const last = getSettings().lastRefreshAt;
+export async function cooldownRemaining(now: number = Date.now()): Promise<number> {
+  const settings = await getSettings();
+  const last = settings.lastRefreshAt;
   if (!last) return 0;
   return Math.max(0, last + cooldownMs() - now);
 }
@@ -52,8 +53,9 @@ interface Lock {
   at: number;
 }
 
-function readLock(): Lock | null {
-  const row = getDb().select().from(meta).where(eq(meta.key, LOCK_KEY)).get();
+async function readLock(): Promise<Lock | null> {
+  const rows = await getDb().select().from(meta).where(eq(meta.key, LOCK_KEY));
+  const row = rows[0];
   if (!row) return null;
   try {
     return JSON.parse(row.value) as Lock;
@@ -62,43 +64,43 @@ function readLock(): Lock | null {
   }
 }
 
-export function acquireLock(runId: string, now: number = Date.now()): { acquired: true } | { acquired: false; heldBy: string } {
+export async function acquireLock(runId: string, now: number = Date.now()): Promise<{ acquired: true } | { acquired: false; heldBy: string }> {
   const db = getDb();
-  return db.transaction((tx) => {
-    const row = tx.select().from(meta).where(eq(meta.key, LOCK_KEY)).get();
-    let current: Lock | null = null;
-    if (row) {
-      try {
-        current = JSON.parse(row.value) as Lock;
-      } catch {
-        current = null;
-      }
+  const rows = await db.select().from(meta).where(eq(meta.key, LOCK_KEY));
+  const row = rows[0];
+  let current: Lock | null = null;
+  if (row) {
+    try {
+      current = JSON.parse(row.value) as Lock;
+    } catch {
+      current = null;
     }
+  }
 
-    if (current) {
-      const holder = tx.select().from(refreshRuns).where(eq(refreshRuns.id, current.runId)).get();
-      const stillRunning = holder?.status === "running";
-      const stale = now - current.at >= LOCK_STALE_MS;
-      if (stillRunning && !stale) return { acquired: false, heldBy: current.runId };
-      if (stillRunning && stale) {
-        tx.update(refreshRuns)
-          .set({ status: "failed", error: "Stopped after 10 minutes without finishing.", finishedAt: now })
-          .where(eq(refreshRuns.id, current.runId))
-          .run();
-      }
+  if (current) {
+    const holderRows = await db.select().from(refreshRuns).where(eq(refreshRuns.id, current.runId));
+    const holder = holderRows[0];
+    const stillRunning = holder?.status === "running";
+    const stale = now - current.at >= LOCK_STALE_MS;
+    if (stillRunning && !stale) return { acquired: false, heldBy: current.runId };
+    if (stillRunning && stale) {
+      await db.update(refreshRuns)
+        .set({ status: "failed", error: "Stopped after 10 minutes without finishing.", finishedAt: now })
+        .where(eq(refreshRuns.id, current.runId));
     }
+  }
 
-    const value = JSON.stringify({ runId, at: now } satisfies Lock);
-    tx.insert(meta).values({ key: LOCK_KEY, value }).onConflictDoUpdate({ target: meta.key, set: { value } }).run();
-    return { acquired: true };
-  });
+  const value = JSON.stringify({ runId, at: now } satisfies Lock);
+  await db.insert(meta).values({ key: LOCK_KEY, value }).onConflictDoUpdate({ target: meta.key, set: { value } });
+  return { acquired: true };
 }
 
-export function releaseLock(runId: string): void {
-  const current = readLock();
-  if (current?.runId === runId) getDb().delete(meta).where(eq(meta.key, LOCK_KEY)).run();
+export async function releaseLock(runId: string): Promise<void> {
+  const current = await readLock();
+  if (current?.runId === runId) await getDb().delete(meta).where(eq(meta.key, LOCK_KEY));
 }
 
-export function lockHolder(): string | null {
-  return readLock()?.runId ?? null;
+export async function lockHolder(): Promise<string | null> {
+  const lock = await readLock();
+  return lock?.runId ?? null;
 }

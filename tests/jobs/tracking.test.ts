@@ -9,27 +9,29 @@ import { authed, listing, params, resetTables } from "../helpers";
 
 let jobId: string;
 
-beforeEach(() => {
-  resetTables();
-  const role = createRole({ name: "Comms" });
-  mergeListings([listing()], { roleId: role.id, now: 1000, provider: null, model: null });
-  jobId = listJobs()[0]!.id;
+beforeEach(async () => {
+  await resetTables();
+  const role = await createRole({ name: "Comms" });
+  await mergeListings([listing()], { roleId: role.id, now: 1000, provider: null, model: null });
+  const allJobs = await listJobs();
+  jobId = allJobs[0]!.id;
 });
 
 describe("tracker (brief 2.8)", () => {
-  it("sets applied_at the first time the status becomes Applied, and keeps it", () => {
-    const first = updateJobTracking(jobId, { status: "applied" }, 5000);
+  it("sets applied_at the first time the status becomes Applied, and keeps it", async () => {
+    const first = await updateJobTracking(jobId, { status: "applied" }, 5000);
     expect(first.appliedAt).toBe(5000);
 
-    const later = updateJobTracking(jobId, { status: "interview" }, 6000);
+    const later = await updateJobTracking(jobId, { status: "interview" }, 6000);
     expect(later.appliedAt).toBe(5000);
 
-    const again = updateJobTracking(jobId, { status: "applied" }, 7000);
+    const again = await updateJobTracking(jobId, { status: "applied" }, 7000);
     expect(again.appliedAt).toBe(5000);
   });
 
-  it("does not set applied_at for other statuses", () => {
-    expect(updateJobTracking(jobId, { status: "saved" }).appliedAt).toBeNull();
+  it("does not set applied_at for other statuses", async () => {
+    const res = await updateJobTracking(jobId, { status: "saved" });
+    expect(res.appliedAt).toBeNull();
   });
 
   it("PATCH accepts only status and notes", async () => {
@@ -56,13 +58,13 @@ describe("'New' badge data (brief 2.5)", () => {
   });
 
   it("moves seen_up_to to the completion time of a refresh", async () => {
-    markRefreshCompleted(2000);
-    expect(getSettings().seenUpTo).toBe(2000);
-    expect(getSettings().lastRefreshAt).toBe(2000);
+    await markRefreshCompleted(2000);
+    expect((await getSettings()).seenUpTo).toBe(2000);
+    expect((await getSettings()).lastRefreshAt).toBe(2000);
 
     // A listing first seen after 2000 is "new" on the next visit; one seen at 1000 is not.
-    const role = createRole({ name: "Marketing" });
-    mergeListings([listing()], { roleId: role.id, now: 3000, provider: null, model: null });
+    const role = await createRole({ name: "Marketing" });
+    await mergeListings([listing()], { roleId: role.id, now: 3000, provider: null, model: null });
 
     const response = await getJobs(authed("/api/jobs"), params({}));
     const body = (await response.json()) as { seenUpTo: number; jobs: { firstSeen: number }[] };

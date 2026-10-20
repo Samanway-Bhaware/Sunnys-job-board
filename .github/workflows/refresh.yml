@@ -1,0 +1,43 @@
+name: Scheduled Job Refresh
+
+on:
+  schedule:
+    # Runs every 4 hours every day (e.g. 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+concurrency:
+  group: refresh-runs
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Scrape & Refresh Jobs into Neon DB
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Job Refresh
+        run: npm run refresh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          FREEHIRE_API_URL: ${{ secrets.FREEHIRE_API_URL }}
+          FREEHIRE_API_KEY: ${{ secrets.FREEHIRE_API_KEY }}
+          REED_API_KEY: ${{ secrets.REED_API_KEY }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+

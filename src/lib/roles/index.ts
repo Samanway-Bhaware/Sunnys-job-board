@@ -34,88 +34,87 @@ export function toRoleView(row: RoleRow): RoleView {
   };
 }
 
-export function listRoles(options: { includeArchived?: boolean } = {}): RoleRow[] {
+export async function listRoles(options: { includeArchived?: boolean } = {}): Promise<RoleRow[]> {
   const db = getDb();
-  const query = db.select().from(roles).orderBy(asc(roles.sortOrder), asc(roles.createdAt));
-  const rows = query.all();
+  const rows = await db.select().from(roles).orderBy(asc(roles.sortOrder), asc(roles.createdAt));
   return options.includeArchived ? rows : rows.filter((r) => !r.archived);
 }
 
-export function getRole(id: string): RoleRow | undefined {
-  return getDb().select().from(roles).where(eq(roles.id, id)).get();
+export async function getRole(id: string): Promise<RoleRow | undefined> {
+  const rows = await getDb().select().from(roles).where(eq(roles.id, id));
+  return rows[0];
 }
 
-export function activeRoleCount(): number {
-  const row = getDb()
-    .select({ n: sql<number>`count(*)` })
+export async function activeRoleCount(): Promise<number> {
+  const rows = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
     .from(roles)
-    .where(eq(roles.archived, false))
-    .get();
-  return row?.n ?? 0;
+    .where(eq(roles.archived, false));
+  return rows[0]?.n ?? 0;
 }
 
-export function createRole(
+export async function createRole(
   input: { name: string; keywords?: string },
   now: number = Date.now(),
-): RoleRow {
+): Promise<RoleRow> {
   const db = getDb();
-  return db.transaction((tx) => {
-    const active = tx.select().from(roles).where(eq(roles.archived, false)).all();
-    if (active.length >= MAX_ROLES) throw new RoleLimitError();
+  const active = await db.select().from(roles).where(eq(roles.archived, false));
+  if (active.length >= MAX_ROLES) throw new RoleLimitError();
 
-    const maxOrder = active.reduce((max, r) => Math.max(max, r.sortOrder), -1);
-    const row: RoleRow = {
-      id: randomUUID(),
-      name: input.name.trim(),
-      keywords: (input.keywords ?? "").trim(),
-      color: nextColor(active.map((r) => r.color)),
-      enabled: true,
-      sortOrder: maxOrder + 1,
-      archived: false,
-      createdAt: now,
-    };
-    tx.insert(roles).values(row).run();
-    return row;
-  });
+  const maxOrder = active.reduce((max, r) => Math.max(max, r.sortOrder), -1);
+  const row: RoleRow = {
+    id: randomUUID(),
+    name: input.name.trim(),
+    keywords: (input.keywords ?? "").trim(),
+    color: nextColor(active.map((r) => r.color)),
+    enabled: true,
+    sortOrder: maxOrder + 1,
+    archived: false,
+    createdAt: now,
+  };
+  await db.insert(roles).values(row);
+  return row;
 }
 
-export function updateRole(
+export async function updateRole(
   id: string,
   patch: { name?: string; keywords?: string; enabled?: boolean },
-): RoleRow {
+): Promise<RoleRow> {
   const db = getDb();
-  const existing = db
+  const rows = await db
     .select()
     .from(roles)
-    .where(and(eq(roles.id, id), eq(roles.archived, false)))
-    .get();
+    .where(and(eq(roles.id, id), eq(roles.archived, false)));
+  const existing = rows[0];
   if (!existing) throw new RoleNotFoundError();
 
   const set: Partial<RoleRow> = {};
   if (patch.name !== undefined) set.name = patch.name.trim();
   if (patch.keywords !== undefined) set.keywords = patch.keywords.trim();
   if (patch.enabled !== undefined) set.enabled = patch.enabled;
-  if (Object.keys(set).length > 0) db.update(roles).set(set).where(eq(roles.id, id)).run();
+  if (Object.keys(set).length > 0) {
+    await db.update(roles).set(set).where(eq(roles.id, id));
+  }
 
-  return getRole(id)!;
+  return (await getRole(id))!;
 }
 
 /** Sets sort order from the given id list; ids not listed keep their relative order after. */
-export function reorderRoles(orderedIds: string[]): RoleRow[] {
+export async function reorderRoles(orderedIds: string[]): Promise<RoleRow[]> {
   const db = getDb();
-  db.transaction((tx) => {
-    const active = tx.select().from(roles).where(eq(roles.archived, false)).all();
-    const known = new Set(active.map((r) => r.id));
-    const ordered = orderedIds.filter((id) => known.has(id));
-    const rest = active
-      .filter((r) => !ordered.includes(r.id))
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((r) => r.id);
+  const active = await db.select().from(roles).where(eq(roles.archived, false));
+  const known = new Set(active.map((r) => r.id));
+  const ordered = orderedIds.filter((id) => known.has(id));
+  const rest = active
+    .filter((r) => !ordered.includes(r.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((r) => r.id);
 
-    [...ordered, ...rest].forEach((id, index) => {
-      tx.update(roles).set({ sortOrder: index }).where(eq(roles.id, id)).run();
-    });
-  });
+  const all = [...ordered, ...rest];
+  for (let index = 0; index < all.length; index += 1) {
+    const id = all[index]!;
+    await db.update(roles).set({ sortOrder: index }).where(eq(roles.id, id));
+  }
   return listRoles();
 }
 
@@ -128,34 +127,31 @@ export type DeleteOutcome =
  * move to an Archived tab instead of disappearing, and its untracked jobs are
  * deleted. If nothing was tracked, the role row itself goes too.
  */
-export function deleteRole(id: string): DeleteOutcome {
+export async function deleteRole(id: string): Promise<DeleteOutcome> {
   const db = getDb();
-  return db.transaction((tx) => {
-    const existing = tx
-      .select()
-      .from(roles)
-      .where(and(eq(roles.id, id), eq(roles.archived, false)))
-      .get();
-    if (!existing) throw new RoleNotFoundError();
+  const rows = await db
+    .select()
+    .from(roles)
+    .where(and(eq(roles.id, id), eq(roles.archived, false)));
+  const existing = rows[0];
+  if (!existing) throw new RoleNotFoundError();
 
-    const untracked = tx
-      .delete(jobs)
-      .where(and(eq(jobs.roleId, id), eq(jobs.status, "")))
-      .run();
+  const untracked = await db
+    .delete(jobs)
+    .where(and(eq(jobs.roleId, id), eq(jobs.status, "")))
+    .returning();
 
-    const trackedKept =
-      tx
-        .select({ n: sql<number>`count(*)` })
-        .from(jobs)
-        .where(and(eq(jobs.roleId, id), ne(jobs.status, "")))
-        .get()?.n ?? 0;
+  const trackedRows = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(jobs)
+    .where(and(eq(jobs.roleId, id), ne(jobs.status, "")));
+  const trackedKept = trackedRows[0]?.n ?? 0;
 
-    if (trackedKept > 0) {
-      tx.update(roles).set({ archived: true, enabled: false }).where(eq(roles.id, id)).run();
-      return { kind: "archived", trackedKept, untrackedRemoved: untracked.changes };
-    }
+  if (trackedKept > 0) {
+    await db.update(roles).set({ archived: true, enabled: false }).where(eq(roles.id, id));
+    return { kind: "archived", trackedKept, untrackedRemoved: untracked.length };
+  }
 
-    tx.delete(roles).where(eq(roles.id, id)).run();
-    return { kind: "deleted", untrackedRemoved: untracked.changes };
-  });
+  await db.delete(roles).where(eq(roles.id, id));
+  return { kind: "deleted", untrackedRemoved: untracked.length };
 }

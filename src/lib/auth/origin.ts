@@ -21,12 +21,14 @@ export function hasValidOrigin(request: Request): boolean {
   // No Origin header: not a browser form/fetch, so CSRF does not apply.
   if (!origin || origin === "null") return true;
 
-  const expectedHost =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = request.headers.get("host")?.split(",")[0]?.trim();
+  const expectedHost = forwardedHost || host;
   if (!expectedHost) return false;
 
   try {
-    return new URL(origin).host === expectedHost;
+    const originHost = new URL(origin).host;
+    return originHost === expectedHost || (Boolean(host) && originHost === host);
   } catch {
     return false;
   }

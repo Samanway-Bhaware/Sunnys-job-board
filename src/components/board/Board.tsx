@@ -64,10 +64,18 @@ export default function Board() {
   const [dialogBusy, setDialogBusy] = useState(false);
   const [dialogError, setDialogError] = useState("");
   const [tick, setTick] = useState(0);
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(THEME_KEY) === "dark";
+    } catch {
+      return false;
+    }
+  });
   const startedRef = useRef(false);
   const runStartRef = useRef<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const locationDetailsRef = useRef<HTMLDetailsElement>(null);
 
   const today = useMemo(() => todayLondon(), []);
 
@@ -77,7 +85,6 @@ export default function Board() {
     try {
       const isDark = window.localStorage.getItem(THEME_KEY) === "dark";
       document.documentElement.classList.toggle("dark", isDark);
-      setDark(isDark);
     } catch {
       /* ignore */
     }
@@ -92,6 +99,30 @@ export default function Board() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    function onPointerDown(e: MouseEvent | TouchEvent) {
+      if (
+        locationDetailsRef.current?.open &&
+        !locationDetailsRef.current.contains(e.target as Node)
+      ) {
+        locationDetailsRef.current.open = false;
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && locationDetailsRef.current?.open) {
+        locationDetailsRef.current.open = false;
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, []);
 
   function toggleTheme() {
@@ -406,7 +437,7 @@ export default function Board() {
             </div>
 
             <div className={styles.searchShell}>
-              <details className={styles.popover}>
+              <details ref={locationDetailsRef} className={styles.popover}>
                 <summary>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -441,17 +472,19 @@ export default function Board() {
                   </svg>
                 </summary>
                 <div className={styles.popoverBody}>
-                  {locationOptions.length === 0 ? <span className={styles.muted}>No locations yet.</span> : null}
-                  {locationOptions.map((loc) => (
-                    <label key={loc}>
-                      <input
-                        type="checkbox"
-                        checked={effectiveFilters.locations.includes(loc)}
-                        onChange={() => update({ locations: toggleIn(effectiveFilters.locations, loc) })}
-                      />
-                      {loc}
-                    </label>
-                  ))}
+                  <div className={styles.popoverOptions}>
+                    {locationOptions.length === 0 ? <span className={styles.muted}>No locations yet.</span> : null}
+                    {locationOptions.map((loc) => (
+                      <label key={loc}>
+                        <input
+                          type="checkbox"
+                          checked={effectiveFilters.locations.includes(loc)}
+                          onChange={() => update({ locations: toggleIn(effectiveFilters.locations, loc) })}
+                        />
+                        {loc}
+                      </label>
+                    ))}
+                  </div>
                   <input
                     type="text"
                     placeholder="Or type part of a place name"
@@ -560,7 +593,7 @@ export default function Board() {
               </div>
 
               <div className={styles.filterSection}>
-                <p className={styles.sectionEyebrow}>// work format</p>
+                <p className={styles.sectionEyebrow}>{"// work format"}</p>
                 <div className={styles.chips} role="group" aria-label="Work pattern">
                   {MODE_OPTIONS.map((m) => (
                     <button
@@ -577,7 +610,7 @@ export default function Board() {
               </div>
 
               <div className={styles.filterSection}>
-                <p className={styles.sectionEyebrow}>// employment</p>
+                <p className={styles.sectionEyebrow}>{"// employment"}</p>
                 <div className={styles.chips} role="group" aria-label="Hours">
                   {CONTRACT_OPTIONS.map((c) => (
                     <button
@@ -602,7 +635,7 @@ export default function Board() {
               </div>
 
               <div className={styles.filterSection}>
-                <p className={styles.sectionEyebrow}>// sponsorship</p>
+                <p className={styles.sectionEyebrow}>{"// sponsorship"}</p>
                 <label className={styles.group}>
                   <span className={styles.groupLabel}>Visa sponsorship</span>
                   <select
@@ -626,7 +659,7 @@ export default function Board() {
               </div>
 
               <div className={styles.filterSection}>
-                <p className={styles.sectionEyebrow}>// board view</p>
+                <p className={styles.sectionEyebrow}>{"// board view"}</p>
                 <label className={styles.group}>
                   <span className={styles.groupLabel}>Show</span>
                   <select
@@ -652,7 +685,7 @@ export default function Board() {
             </div>
 
             <div className={styles.statsCard}>
-              <p className={styles.sectionEyebrow}>// the catalogue, today</p>
+              <p className={styles.sectionEyebrow}>{"// the catalogue, today"}</p>
               <div className={styles.statsGrid}>
                 <div className={styles.statItem}>
                   <span className={styles.statLabel}>open roles</span>

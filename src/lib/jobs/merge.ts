@@ -40,79 +40,73 @@ export interface MergeResult {
  * Existing listings get `last_seen = now` and their empty fields filled. Her
  * status, notes and applied date are never touched here.
  */
-export function mergeListings(listings: NormalisedListing[], ctx: MergeContext): MergeResult {
+export async function mergeListings(listings: NormalisedListing[], ctx: MergeContext): Promise<MergeResult> {
   const db = getDb();
   let added = 0;
   let updated = 0;
 
-  db.transaction((tx) => {
-    for (const listing of listings) {
-      const existing = findExisting(tx, listing);
+  for (const listing of listings) {
+    const existing = await findExisting(db, listing);
 
-      if (existing) {
-        tx.update(jobs)
-          .set(fillBlanks(existing, listing, ctx))
-          .where(eq(jobs.id, existing.id))
-          .run();
-        updated += 1;
-        continue;
-      }
-
-      tx.insert(jobs)
-        .values({
-          id: randomUUID(),
-          roleId: ctx.roleId,
-          title: listing.title,
-          org: listing.org,
-          locationText: listing.locationText,
-          locationNorm: listing.locationNorm,
-          workMode: listing.workMode,
-          contract: listing.contract,
-          hoursText: listing.hoursText,
-          salaryText: listing.salaryText,
-          salaryMin: listing.salaryMin,
-          salaryMax: listing.salaryMax,
-          sponsorship: listing.sponsorship,
-          sponsorshipEvidence: listing.sponsorshipEvidence,
-          licensedSponsor: listing.licensedSponsor ?? false,
-          sponsorMatchName: listing.sponsorMatchName ?? null,
-          postedDate: listing.postedDate,
-          closingDate: listing.closingDate,
-          url: listing.url,
-          canonicalUrl: listing.canonicalUrl,
-          source: listing.source,
-          cited: listing.cited,
-          linkStatus: listing.linkStatus,
-          firstSeen: ctx.now,
-          lastSeen: ctx.now,
-          status: "",
-          notes: "",
-          appliedAt: null,
-          provider: ctx.provider,
-          model: ctx.model,
-        })
-        .run();
-      added += 1;
+    if (existing) {
+      await db.update(jobs)
+        .set(fillBlanks(existing, listing, ctx))
+        .where(eq(jobs.id, existing.id));
+      updated += 1;
+      continue;
     }
-  });
+
+    await db.insert(jobs)
+      .values({
+        id: randomUUID(),
+        roleId: ctx.roleId,
+        title: listing.title,
+        org: listing.org,
+        locationText: listing.locationText,
+        locationNorm: listing.locationNorm,
+        workMode: listing.workMode,
+        contract: listing.contract,
+        hoursText: listing.hoursText,
+        salaryText: listing.salaryText,
+        salaryMin: listing.salaryMin,
+        salaryMax: listing.salaryMax,
+        sponsorship: listing.sponsorship,
+        sponsorshipEvidence: listing.sponsorshipEvidence,
+        licensedSponsor: listing.licensedSponsor ?? false,
+        sponsorMatchName: listing.sponsorMatchName ?? null,
+        postedDate: listing.postedDate,
+        closingDate: listing.closingDate,
+        url: listing.url,
+        canonicalUrl: listing.canonicalUrl,
+        source: listing.source,
+        cited: listing.cited,
+        linkStatus: listing.linkStatus,
+        firstSeen: ctx.now,
+        lastSeen: ctx.now,
+        status: "",
+        notes: "",
+        appliedAt: null,
+        provider: ctx.provider,
+        model: ctx.model,
+      });
+    added += 1;
+  }
 
   return { added, updated };
 }
 
-type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
-
-function findExisting(tx: Tx, listing: NormalisedListing): JobRow | undefined {
-  const byUrl = tx.select().from(jobs).where(eq(jobs.canonicalUrl, listing.canonicalUrl)).get();
-  if (byUrl) return byUrl;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function findExisting(tx: any, listing: NormalisedListing): Promise<JobRow | undefined> {
+  const byUrlRows = await tx.select().from(jobs).where(eq(jobs.canonicalUrl, listing.canonicalUrl));
+  if (byUrlRows[0]) return byUrlRows[0];
 
   // Fallback: same organisation and title, compared loosely.
   const key = orgTitleKey(listing.org, listing.title);
-  const candidates = tx
+  const candidates = await tx
     .select()
     .from(jobs)
-    .where(sql`lower(${jobs.org}) = lower(${listing.org})`)
-    .all();
-  return candidates.find((row) => orgTitleKey(row.org, row.title) === key);
+    .where(sql`lower(${jobs.org}) = lower(${listing.org})`);
+  return candidates.find((row: JobRow) => orgTitleKey(row.org, row.title) === key);
 }
 
 /** Only fills fields the stored row lacks. Never overwrites status, notes or appliedAt. */
@@ -161,11 +155,11 @@ function fillBlanks(existing: JobRow, fresh: NormalisedListing, ctx: MergeContex
  * date has passed or they haven't been seen for 21 days. Tracked listings (any
  * status set) are always kept.
  */
-export function applyRetention(now: number = Date.now()): number {
+export async function applyRetention(now: number = Date.now()): Promise<number> {
   const today = todayString(now);
   const cutoff = now - STALE_DAYS * DAY_MS;
 
-  const result = getDb()
+  const result = await getDb()
     .delete(jobs)
     .where(
       and(
@@ -176,7 +170,7 @@ export function applyRetention(now: number = Date.now()): number {
         ),
       ),
     )
-    .run();
+    .returning();
 
-  return result.changes;
+  return result.length;
 }

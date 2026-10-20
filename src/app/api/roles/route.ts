@@ -8,7 +8,8 @@ import { createRole, listRoles, reorderRoles, toRoleView } from "@/lib/roles";
 export const dynamic = "force-dynamic";
 
 export const GET = protectedRoute(async () => {
-  return NextResponse.json({ ok: true, roles: listRoles({ includeArchived: true }).map(toRoleView) });
+  const roles = await listRoles({ includeArchived: true });
+  return NextResponse.json({ ok: true, roles: roles.map(toRoleView) });
 });
 
 const Create = z
@@ -26,7 +27,7 @@ export const POST = protectedRoute(async (request) => {
   const body = await readJson(request, Create);
   if (isResponse(body)) return body;
 
-  const role = createRole(body);
+  const role = await createRole(body);
   const search = await startRefresh({ trigger: "role_added", roleIds: [role.id] });
   return NextResponse.json(
     { ok: true, role: toRoleView(role), run: search.started ? search.run : null, search },
@@ -41,5 +42,6 @@ export const PATCH = protectedRoute(async (request) => {
   const body = await readJson(request, Reorder);
   if (isResponse(body)) return body;
 
-  return NextResponse.json({ ok: true, roles: reorderRoles(body.order).map(toRoleView) });
+  const roles = await reorderRoles(body.order);
+  return NextResponse.json({ ok: true, roles: roles.map(toRoleView) });
 });

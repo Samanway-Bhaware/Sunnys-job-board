@@ -189,13 +189,13 @@ export default function SettingsForm() {
       <main className={styles.wrap}>
         <div className={styles.top}>
           <div>
-            <p className={styles.eyebrow}>// configuration</p>
+            <p className={styles.eyebrow}>{"// configuration"}</p>
             <h1>Settings</h1>
           </div>
         </div>
 
         <section className={styles.section} aria-labelledby="search-h">
-          <p className={styles.subhead}>// search scope</p>
+          <p className={styles.subhead}>{"// search scope"}</p>
           <h2 id="search-h">Search</h2>
           <p className={styles.hint}>
             This decides what gets fetched. The filters on the board only narrow what&rsquo;s already been found.
@@ -261,7 +261,7 @@ export default function SettingsForm() {
         </section>
 
         <section className={styles.section} aria-labelledby="roles-h">
-          <p className={styles.subhead}>// categories</p>
+          <p className={styles.subhead}>{"// categories"}</p>
           <h2 id="roles-h">Role types</h2>
           <p className={styles.hint}>Each role gets its own tab and its own search. Up to 10.</p>
 
@@ -307,7 +307,7 @@ export default function SettingsForm() {
         </section>
 
         <section className={styles.section} aria-labelledby="export-h">
-          <p className={styles.subhead}>// export</p>
+          <p className={styles.subhead}>{"// export"}</p>
           <h2 id="export-h">Your tracked roles</h2>
           <p className={styles.hint}>
             A spreadsheet of every role you&rsquo;ve given a status, with your notes. Opens in Excel, Numbers or Google Sheets.
@@ -320,7 +320,7 @@ export default function SettingsForm() {
         </section>
 
         <section className={styles.section} aria-labelledby="session-h">
-          <p className={styles.subhead}>// session</p>
+          <p className={styles.subhead}>{"// session"}</p>
           <h2 id="session-h">This device</h2>
           <p className={styles.hint}>You&rsquo;ll be asked for the password next time you open the site on this browser.</p>
           <div className={styles.actions}>

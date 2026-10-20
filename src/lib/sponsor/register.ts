@@ -1,5 +1,5 @@
-import { eq, like, sql } from "drizzle-orm";
-import { getDb, getSqlite } from "@/lib/db";
+import { eq, ilike, sql } from "drizzle-orm";
+import { getDb } from "@/lib/db";
 import { jobs, meta, sponsorRegister } from "@/lib/db/schema";
 import { DAY_MS } from "@/lib/dates";
 import { getEnv } from "@/lib/env";
@@ -40,35 +40,31 @@ export interface RegisterStatus {
   lastError: string | null;
 }
 
-function readMeta(key: string): string | null {
-  return getDb().select().from(meta).where(eq(meta.key, key)).get()?.value ?? null;
+async function readMeta(key: string): Promise<string | null> {
+  const rows = await getDb().select().from(meta).where(eq(meta.key, key));
+  return rows[0]?.value ?? null;
 }
 
-function writeMeta(key: string, value: string): void {
-  getDb().insert(meta).values({ key, value }).onConflictDoUpdate({ target: meta.key, set: { value } }).run();
+async function writeMeta(key: string, value: string): Promise<void> {
+  await getDb().insert(meta).values({ key, value }).onConflictDoUpdate({ target: meta.key, set: { value } });
 }
 
-export function registerStatus(): RegisterStatus {
-  const rows = Number(readMeta(META_ROWS) ?? 0);
-  const updatedAt = readMeta(META_UPDATED);
+export async function registerStatus(): Promise<RegisterStatus> {
+  const rows = Number((await readMeta(META_ROWS)) ?? 0);
+  const updatedAt = await readMeta(META_UPDATED);
   return {
     available: rows > 0,
     rows,
     updatedAt: updatedAt ? Number(updatedAt) : null,
-    sourceUrl: readMeta(META_SOURCE),
-    lastError: readMeta(META_ERROR),
+    sourceUrl: await readMeta(META_SOURCE),
+    lastError: await readMeta(META_ERROR),
   };
 }
 
-export function registerIsStale(now: number = Date.now()): boolean {
-  const status = registerStatus();
-  return !status.available || status.updatedAt === null || now - status.updatedAt > REGISTER_MAX_AGE_MS;
-}
-
-/** The current CSV link on the publication page. */
-export function findCsvUrl(html: string): string | null {
-  const match = html.match(/https:\/\/assets\.publishing\.service\.gov\.uk\/[^"'\s<>]+?\.csv/i);
-  return match ? match[0] : null;
+export async function registerIsStale(now: number = Date.now()): Promise<boolean> {
+  const status = await registerStatus();
+  if (!status.available || !status.updatedAt) return true;
+  return now - status.updatedAt >= REGISTER_MAX_AGE_MS;
 }
 
 export class RegisterFormatError extends Error {
@@ -76,6 +72,14 @@ export class RegisterFormatError extends Error {
     super(message);
     this.name = "RegisterFormatError";
   }
+}
+
+/** Finds the first direct link to the CSV on the gov.uk publication page. */
+export function findCsvUrl(html: string): string | null {
+  const match = html.match(/href="([^"]+\.csv)"/i) ?? html.match(/href='([^']+\.csv)'/i);
+  if (!match) return null;
+  const href = match[1]!;
+  return href.startsWith("http") ? href : `https://www.gov.uk${href}`;
 }
 
 export interface RegisterRow {
@@ -89,7 +93,7 @@ export interface RegisterRow {
 
 /** Parses the CSV text into rows, one per alias per route. Throws if the columns moved. */
 export function parseRegister(csv: string): RegisterRow[] {
-  const table = parseCsv(csv.replace(/^﻿/, ""));
+  const table = parseCsv(csv.replace(/^\uFEFF/, ""));
   const header = (table[0] ?? []).map((h) => h.trim());
   const missing = EXPECTED_HEADER.filter((h) => !header.includes(h));
   if (missing.length > 0) {
@@ -119,21 +123,18 @@ export function parseRegister(csv: string): RegisterRow[] {
   return rows;
 }
 
-/** Replaces the table wholesale, inside one transaction, and records provenance. */
-export function storeRegister(rows: RegisterRow[], sourceUrl: string, now: number = Date.now()): void {
-  const sqlite = getSqlite();
-  const insert = sqlite.prepare(
-    "INSERT OR IGNORE INTO sponsor_register (org_name, org_norm, town, county, rating, route) VALUES (?, ?, ?, ?, ?, ?)",
-  );
-  const run = sqlite.transaction(() => {
-    sqlite.prepare("DELETE FROM sponsor_register").run();
-    for (const r of rows) insert.run(r.orgName, r.orgNorm, r.town, r.county, r.rating, r.route);
-  });
-  run();
-  writeMeta(META_ROWS, String(rows.length));
-  writeMeta(META_UPDATED, String(now));
-  writeMeta(META_SOURCE, sourceUrl);
-  getDb().delete(meta).where(eq(meta.key, META_ERROR)).run();
+/** Replaces the table wholesale and records provenance. */
+export async function storeRegister(rows: RegisterRow[], sourceUrl: string, now: number = Date.now()): Promise<void> {
+  const db = getDb();
+  await db.delete(sponsorRegister);
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    await db.insert(sponsorRegister).values(rows.slice(i, i + CHUNK_SIZE)).onConflictDoNothing();
+  }
+  await writeMeta(META_ROWS, String(rows.length));
+  await writeMeta(META_UPDATED, String(now));
+  await writeMeta(META_SOURCE, sourceUrl);
+  await db.delete(meta).where(eq(meta.key, META_ERROR));
 }
 
 /**
@@ -156,10 +157,10 @@ export async function downloadRegister(options: { fetchImpl?: FetchLike; now?: n
     const rows = parseRegister(await file.text());
     if (rows.length < 1000) throw new RegisterFormatError(`The register looked wrong: only ${rows.length} rows.`);
 
-    storeRegister(rows, csvUrl, now);
-    rematchAllJobs();
+    await storeRegister(rows, csvUrl, now);
+    await rematchAllJobs();
   } catch (error) {
-    writeMeta(META_ERROR, error instanceof Error ? error.message.slice(0, 300) : "Download failed.");
+    await writeMeta(META_ERROR, error instanceof Error ? error.message.slice(0, 300) : "Download failed.");
   }
   return registerStatus();
 }
@@ -188,41 +189,43 @@ function distinctByName(rows: Row[]): Row[] {
  * then prefers one in the listing's town; if that still leaves more than one it
  * declines rather than guess.
  */
-export function matchSponsor(orgName: string, locationNorm = ""): SponsorMatch | null {
+export async function matchSponsor(orgName: string, locationNorm = ""): Promise<SponsorMatch | null> {
   const norm = normaliseOrgName(orgName);
   if (!norm) return null;
   const db = getDb();
 
-  const exact = db.select().from(sponsorRegister).where(eq(sponsorRegister.orgNorm, norm)).all();
+  const exact = await db.select().from(sponsorRegister).where(eq(sponsorRegister.orgNorm, norm));
   if (exact.length > 0) {
     const r = exact[0]!;
     return { name: r.orgName, town: r.town, rating: r.rating, route: r.route, kind: "exact" };
   }
 
-  // Candidate generation: rows sharing the listing's *rarest* usable token. The
-  // longest token is not the rarest — "international" appears in 2,400 register
-  // rows and hid "Edinburgh International Festival Society" behind a result cap.
+  // Candidate generation: rows sharing the listing's *rarest* usable token.
   const tokens = strongTokens(orgName)
     .filter((t) => t.length >= 4)
     .map((t) => t.replace(/[%_]/g, ""))
     .filter(Boolean);
   if (tokens.length === 0) return null;
 
-  const anchor = tokens
-    .map((token) => ({
-      token,
-      n: db.select({ n: sql<number>`count(*)` }).from(sponsorRegister).where(like(sponsorRegister.orgNorm, `%${token}%`)).get()?.n ?? 0,
-    }))
-    .sort((a, b) => a.n - b.n)[0]!;
+  const tokenCounts = await Promise.all(
+    tokens.map(async (token) => {
+      const rows = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(sponsorRegister)
+        .where(ilike(sponsorRegister.orgNorm, `%${token}%`));
+      return { token, n: rows[0]?.n ?? 0 };
+    }),
+  );
+  tokenCounts.sort((a, b) => a.n - b.n);
+  const anchor = tokenCounts[0]!;
   if (anchor.n === 0) return null;
 
   const candidates = distinctByName(
-    db
+    await db
       .select()
       .from(sponsorRegister)
-      .where(like(sponsorRegister.orgNorm, `%${anchor.token}%`))
-      .limit(3000)
-      .all(),
+      .where(ilike(sponsorRegister.orgNorm, `%${anchor.token}%`))
+      .limit(3000),
   ).filter((r) => isFuzzyMatch(orgName, r.orgName, townHint(r.town, locationNorm)));
 
   if (candidates.length === 0) return null;
@@ -249,22 +252,36 @@ function townHint(rowTown: string, locationNorm: string): string {
 }
 
 /** Re-runs matching over every stored job, e.g. after the register is refreshed. */
-export function rematchAllJobs(): number {
+export async function rematchAllJobs(): Promise<number> {
   const db = getDb();
-  if (!registerStatus().available) return 0;
-  let changed = 0;
-  const rows = db.select({ id: jobs.id, org: jobs.org, locationNorm: jobs.locationNorm, licensedSponsor: jobs.licensedSponsor, sponsorMatchName: jobs.sponsorMatchName }).from(jobs).all();
-  db.transaction((tx) => {
-    for (const row of rows) {
-      const match = matchSponsor(row.org, row.locationNorm);
-      const licensed = match !== null;
-      const name = match?.name ?? null;
-      if (row.licensedSponsor === licensed && row.sponsorMatchName === name) continue;
-      tx.update(jobs).set({ licensedSponsor: licensed, sponsorMatchName: name }).where(sql`${jobs.id} = ${row.id}`).run();
-      changed += 1;
+  if (!(await registerStatus()).available) return 0;
+  const rows = await db
+    .select({
+      id: jobs.id,
+      org: jobs.org,
+      locationNorm: jobs.locationNorm,
+      licensedSponsor: jobs.licensedSponsor,
+      sponsorMatchName: jobs.sponsorMatchName,
+    })
+    .from(jobs);
+
+  const updates: { id: string; licensed: boolean; matchName: string | null }[] = [];
+  for (const row of rows) {
+    const match = await matchSponsor(row.org, row.locationNorm);
+    const licensed = match !== null;
+    if (licensed !== row.licensedSponsor || (match?.name ?? null) !== row.sponsorMatchName) {
+      updates.push({ id: row.id, licensed, matchName: match?.name ?? null });
     }
-  });
-  return changed;
+  }
+
+  for (const u of updates) {
+    await db
+      .update(jobs)
+      .set({ licensedSponsor: u.licensed, sponsorMatchName: u.matchName })
+      .where(eq(jobs.id, u.id));
+  }
+
+  return updates.length;
 }
 
 /* ---------- scheduling ---------- */
@@ -277,16 +294,15 @@ export function scheduleRegisterRefresh(): void {
     log.info("sponsor-register", "scheduled refresh disabled (SPONSOR_REGISTER_REFRESH=0)");
     return;
   }
-  const tick = () => {
-    if (!registerIsStale()) return;
-    void downloadRegister().then((s) => {
-      if (s.lastError) log.warn("sponsor-register", `not refreshed: ${s.lastError}`);
-      else log.info("sponsor-register", `${s.rows} rows loaded`);
-    });
+  const tick = async () => {
+    if (!(await registerIsStale())) return;
+    const s = await downloadRegister();
+    if (s.lastError) log.warn("sponsor-register", `not refreshed: ${s.lastError}`);
+    else log.info("sponsor-register", `${s.rows} rows loaded`);
   };
-  setTimeout(tick, 5_000).unref();
+  setTimeout(() => { void tick(); }, 5_000).unref();
   if (!timer) {
-    timer = setInterval(tick, DAY_MS);
+    timer = setInterval(() => { void tick(); }, DAY_MS);
     timer.unref();
   }
 }

@@ -52,12 +52,13 @@ export function toJobView(row: JobRow): JobView {
   };
 }
 
-export function listJobs(): JobRow[] {
-  return getDb().select().from(jobs).all();
+export async function listJobs(): Promise<JobRow[]> {
+  return await getDb().select().from(jobs);
 }
 
-export function getJob(id: string): JobRow | undefined {
-  return getDb().select().from(jobs).where(eq(jobs.id, id)).get();
+export async function getJob(id: string): Promise<JobRow | undefined> {
+  const rows = await getDb().select().from(jobs).where(eq(jobs.id, id));
+  return rows[0];
 }
 
 export class JobNotFoundError extends Error {
@@ -72,13 +73,13 @@ export class JobNotFoundError extends Error {
  * status and notes only). `applied_at` is set automatically the first time the
  * status becomes Applied and is never cleared by later changes.
  */
-export function updateJobTracking(
+export async function updateJobTracking(
   id: string,
   patch: { status?: Status; notes?: string },
   now: number = Date.now(),
-): JobRow {
+): Promise<JobRow> {
   const db = getDb();
-  const existing = getJob(id);
+  const existing = await getJob(id);
   if (!existing) throw new JobNotFoundError();
 
   const set: Partial<JobRow> = {};
@@ -88,6 +89,8 @@ export function updateJobTracking(
   }
   if (patch.notes !== undefined) set.notes = patch.notes;
 
-  if (Object.keys(set).length > 0) db.update(jobs).set(set).where(eq(jobs.id, id)).run();
-  return getJob(id)!;
+  if (Object.keys(set).length > 0) {
+    await db.update(jobs).set(set).where(eq(jobs.id, id));
+  }
+  return (await getJob(id))!;
 }

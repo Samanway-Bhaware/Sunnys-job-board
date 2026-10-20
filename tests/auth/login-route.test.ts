@@ -25,8 +25,8 @@ function post(path: string, body: unknown, ip: string, origin: string | null = O
   });
 }
 
-beforeEach(() => {
-  getDb().delete(loginAttempts).run();
+beforeEach(async () => {
+  await getDb().delete(loginAttempts);
 });
 
 describe("POST /api/login", () => {

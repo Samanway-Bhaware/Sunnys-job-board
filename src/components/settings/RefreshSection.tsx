@@ -17,7 +17,7 @@ export default function RefreshSection({ data, roles }: Props) {
 
   return (
     <section className={styles.section} aria-labelledby="refresh-h">
-      <p className={styles.subhead}>// data source</p>
+      <p className={styles.subhead}>{"// data source"}</p>
       <h2 id="refresh-h">Job Search</h2>
       <p className={styles.hint}>
         Opening the board runs a refresh if the last one is more than {data.cooldownMinutes === 0 ? "a moment" : `${data.cooldownMinutes} minutes`} old.

@@ -14,12 +14,14 @@
     "test:e2e": "next build && playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/lib/db/migrate.ts",
+    "refresh": "node --import tsx scripts/refresh.ts",
     "smoke:refresh": "node --env-file=.env --import tsx scripts/smoke-refresh.ts",
     "sponsor:check": "node --import tsx scripts/sponsor-check.ts",
     "smoke:test": "node --env-file=.env --import tsx scripts/live-test.ts"
   },
   "dependencies": {
-    "better-sqlite3": "13.0.3",
+    "@electric-sql/pglite": "^0.5.10",
+    "@neondatabase/serverless": "^1.2.0",
     "drizzle-orm": "0.45.2",
     "next": "16.3.4",
     "react": "19.3.0",
@@ -28,16 +30,17 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "@types/better-sqlite3": "7.6.13",
     "@types/node": "22.18.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/ws": "^8.18.2",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.0",
     "eslint-config-next": "16.3.4",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
-    "vitest": "5.0.0"
+    "vitest": "5.0.0",
+    "ws": "^8.22.0"
   },
   "engines": {
     "node": ">=20.9.0"

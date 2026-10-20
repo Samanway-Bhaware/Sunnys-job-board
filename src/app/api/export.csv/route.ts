@@ -14,8 +14,12 @@ const SPONSORSHIP = { offered: "Offered", not_offered: "Not offered", not_stated
 
 /** Brief 2.8: "Export tracked roles (CSV)". Tracked = any status set. */
 export const GET = protectedRoute(async () => {
-  const roleName = new Map(listRoles({ includeArchived: true }).map((r) => [r.id, r.name]));
-  const tracked = listJobs().filter((j) => j.status !== "");
+  const [allRoles, allJobs] = await Promise.all([
+    listRoles({ includeArchived: true }),
+    listJobs(),
+  ]);
+  const roleName = new Map(allRoles.map((r) => [r.id, r.name]));
+  const tracked = allJobs.filter((j) => j.status !== "");
 
   const rows = tracked.map((j) => [
     j.org,

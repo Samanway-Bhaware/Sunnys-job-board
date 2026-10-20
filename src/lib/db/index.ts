@@ -1,60 +1,94 @@
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
-import Database from "better-sqlite3";
-import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { drizzle as drizzleNeon, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import { drizzle as drizzlePglite, type PgliteDatabase } from "drizzle-orm/pglite";
+import { neon } from "@neondatabase/serverless";
+import { PGlite } from "@electric-sql/pglite";
 import { getEnv } from "@/lib/env";
 import * as schema from "./schema";
 
-export type Db = BetterSQLite3Database<typeof schema>;
+export type Db = NeonHttpDatabase<typeof schema> | PgliteDatabase<typeof schema>;
 
-let sqlite: Database.Database | null = null;
-let db: Db | null = null;
-let openedAt: string | null = null;
-
-function resolveDatabasePath(): string {
-  const configured = getEnv().DATABASE_PATH;
-  if (configured === ":memory:") return configured;
-  // Deliberately not `resolve(process.cwd(), …)`: Next's file tracer treats that
-  // exact pattern as "read the whole project" and copies every source file into
-  // the standalone output. `resolve(x)` resolves against cwd just the same.
-  return isAbsolute(configured) ? configured : resolve(configured);
+interface GlobalDbState {
+  db: Db | null;
+  pgliteInstance: PGlite | null;
+  openedTarget: string | null;
+  migratedTarget: string | null;
+  migrationPromise: Promise<void> | null;
+  seededTarget: string | null;
+  seedPromise: Promise<void> | null;
 }
 
-export function getSqlite(): Database.Database {
-  const path = resolveDatabasePath();
+const globalForDb = globalThis as unknown as {
+  __sunnynunnyDb?: GlobalDbState;
+};
 
-  // DATABASE_PATH changing under us only happens in tests; reopen rather than
-  // silently keep handing back a handle to the previous file.
-  if (sqlite && openedAt !== path) closeDb();
-
-  if (!sqlite) {
-    if (path !== ":memory:") {
-      const dir = dirname(path);
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    }
-    sqlite = new Database(path);
-    sqlite.pragma("journal_mode = WAL");
-    sqlite.pragma("foreign_keys = ON");
-    sqlite.pragma("busy_timeout = 5000");
-    openedAt = path;
+export function getDbState(): GlobalDbState {
+  if (!globalForDb.__sunnynunnyDb) {
+    globalForDb.__sunnynunnyDb = {
+      db: null,
+      pgliteInstance: null,
+      openedTarget: null,
+      migratedTarget: null,
+      migrationPromise: null,
+      seededTarget: null,
+      seedPromise: null,
+    };
   }
+  return globalForDb.__sunnynunnyDb;
+}
 
-  return sqlite;
+export function currentDbTarget(): string {
+  const env = getEnv();
+  const dbUrl = env.DATABASE_URL;
+  const isNeon = Boolean(dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")));
+  return isNeon ? dbUrl! : ":memory:";
 }
 
 export function getDb(): Db {
-  const connection = getSqlite();
-  if (!db || openedAt !== resolveDatabasePath()) {
-    db = drizzle(connection, { schema });
+  const state = getDbState();
+  const target = currentDbTarget();
+  const isNeon = target !== ":memory:";
+
+  if (state.db && state.openedTarget === target) {
+    return state.db;
   }
-  return db;
+
+  if (isNeon) {
+    const sql = neon(target);
+    state.db = drizzleNeon(sql, { schema });
+    state.openedTarget = target;
+    state.migratedTarget = null;
+    state.migrationPromise = null;
+    state.seededTarget = null;
+    state.seedPromise = null;
+    return state.db;
+  }
+
+  // In-memory PGlite for tests or local development without external Postgres
+  if (!state.pgliteInstance || state.openedTarget !== target) {
+    state.pgliteInstance = new PGlite();
+    state.db = drizzlePglite(state.pgliteInstance, { schema });
+    state.openedTarget = target;
+    state.migratedTarget = null;
+    state.migrationPromise = null;
+    state.seededTarget = null;
+    state.seedPromise = null;
+  }
+
+  return state.db!;
 }
 
-export function closeDb(): void {
-  sqlite?.close();
-  sqlite = null;
-  db = null;
-  openedAt = null;
+export async function closeDb(): Promise<void> {
+  const state = getDbState();
+  if (state.pgliteInstance) {
+    await state.pgliteInstance.close();
+    state.pgliteInstance = null;
+  }
+  state.db = null;
+  state.openedTarget = null;
+  state.migratedTarget = null;
+  state.migrationPromise = null;
+  state.seededTarget = null;
+  state.seedPromise = null;
 }
 
 export { schema };

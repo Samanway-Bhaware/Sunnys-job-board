@@ -5,14 +5,9 @@
  *
  *   npm run sponsor:check
  */
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 process.env.SITE_PASSWORD ??= "sponsor-check";
 process.env.APP_SECRET ??= Buffer.alloc(32, 1).toString("base64");
-process.env.DATABASE_PATH = join(mkdtempSync(join(tmpdir(), "sponsor-check-")), "check.db");
-
+process.env.DATABASE_URL = ":memory:";
 
 /** Real organisations she'd plausibly see listings from. Some are known not to be sponsors. */
 const NAMES: [string, string][] = [
@@ -39,25 +34,25 @@ const NAMES: [string, string][] = [
 ];
 
 async function main(): Promise<void> {
-const { runMigrations } = await import("@/lib/db/migrate-runtime");
-const { closeDb } = await import("@/lib/db");
-const { downloadRegister, matchSponsor } = await import("@/lib/sponsor/register");
+  const { runMigrations } = await import("@/lib/db/migrate-runtime");
+  const { closeDb } = await import("@/lib/db");
+  const { downloadRegister, matchSponsor } = await import("@/lib/sponsor/register");
 
-runMigrations();
-console.log("Downloading the live register…");
-const started = Date.now();
-const status = await downloadRegister();
-console.log(`  ${status.available ? "ok" : "FAILED"} in ${((Date.now() - started) / 1000).toFixed(1)}s — ${status.rows} rows (aliases × routes) from ${status.sourceUrl}${status.lastError ? `\n  error: ${status.lastError}` : ""}\n`);
+  await runMigrations();
+  console.log("Downloading the live register…");
+  const started = Date.now();
+  const status = await downloadRegister();
+  console.log(`  ${status.available ? "ok" : "FAILED"} in ${((Date.now() - started) / 1000).toFixed(1)}s — ${status.rows} rows (aliases × routes) from ${status.sourceUrl}${status.lastError ? `\n  error: ${status.lastError}` : ""}\n`);
 
-let matched = 0;
-const t0 = Date.now();
-for (const [name, town] of NAMES) {
-  const m = matchSponsor(name, town);
-  if (m) matched += 1;
-  console.log(`  ${m ? "✓" : "·"} ${name.padEnd(36)} ${m ? `→ ${m.name} [${m.town}] ${m.rating} (${m.kind})` : "no match"}`);
-}
-console.log(`\n${matched} of ${NAMES.length} matched · ${((Date.now() - t0) / NAMES.length).toFixed(0)} ms per lookup`);
-closeDb();
+  let matched = 0;
+  const t0 = Date.now();
+  for (const [name, town] of NAMES) {
+    const m = await matchSponsor(name, town);
+    if (m) matched += 1;
+    console.log(`  ${m ? "✓" : "·"} ${name.padEnd(36)} ${m ? `→ ${m.name} [${m.town}] ${m.rating} (${m.kind})` : "no match"}`);
+  }
+  console.log(`\n${matched} of ${NAMES.length} matched · ${((Date.now() - t0) / NAMES.length).toFixed(0)} ms per lookup`);
+  await closeDb();
 }
 
 main().catch((e: unknown) => {

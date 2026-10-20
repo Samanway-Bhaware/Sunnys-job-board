@@ -152,6 +152,7 @@
 /* FreeHire dot-grid hero section */
 .hero {
   position: relative;
+  z-index: 20;
   isolation: isolate;
   margin: 0 -1rem;
   padding: 2.25rem 1rem 1.75rem;
@@ -208,6 +209,8 @@
 
 /* FreeHire rounded-2xl unified search bar */
 .searchShell {
+  position: relative;
+  z-index: 10;
   width: 100%;
   max-width: 44rem;
   margin: 0 auto;
@@ -276,6 +279,10 @@
   flex-shrink: 0;
 }
 
+.popover[open] {
+  z-index: 30;
+}
+
 .popover summary {
   list-style: none;
   cursor: pointer;
@@ -299,20 +306,31 @@
 
 .popoverBody {
   position: absolute;
-  z-index: 30;
+  z-index: 50;
   top: calc(100% + 0.625rem);
   left: 0;
   min-width: 15.5rem;
+  max-width: calc(100vw - 2rem);
   background: var(--popover);
   color: var(--popover-foreground);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 0.75rem;
   box-shadow: var(--shadow-lg);
-  display: grid;
-  gap: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
   font-size: 0.8125rem;
   text-align: start;
+}
+
+.popoverOptions {
+  max-height: 14rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 0.25rem;
 }
 
 .popoverBody label {

@@ -33,15 +33,15 @@ export function anon(path: string, init: { method?: string; body?: unknown } = {
 export const params = (p: Record<string, string>) => ({ params: Promise.resolve(p) });
 
 /** Wipes every table so each test starts clean. */
-export function resetTables(): void {
+export async function resetTables(): Promise<void> {
   const db = getDb();
-  db.delete(jobs).run();
-  db.delete(refreshRuns).run();
-  db.delete(roles).run();
-  db.delete(settings).run();
-  db.delete(meta).run();
-  db.delete(sponsorRegister).run();
-  db.delete(usageDaily).run();
+  await db.delete(jobs);
+  await db.delete(refreshRuns);
+  await db.delete(roles);
+  await db.delete(settings);
+  await db.delete(meta);
+  await db.delete(sponsorRegister);
+  await db.delete(usageDaily);
 }
 
 let counter = 0;

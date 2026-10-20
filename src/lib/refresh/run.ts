@@ -8,7 +8,7 @@ import { log } from "@/lib/log";
 import { listRoles, toRoleView } from "@/lib/roles";
 import { scrub } from "@/lib/scrub";
 import { scrapeAll, configuredScrapers } from "@/lib/scrapers";
-import { checkLinks, type FetchLike } from "@/lib/search/linkcheck";
+import { checkLinks } from "@/lib/search/linkcheck";
 import { getScope, markRefreshCompleted } from "@/lib/settings";
 import { matchSponsor, registerStatus } from "@/lib/sponsor/register";
 import {
@@ -84,22 +84,23 @@ export function toRunView(row: RefreshRunRow): RunView {
   };
 }
 
-export function getRun(id: string): RunView | null {
-  const row = getDb().select().from(refreshRuns).where(eq(refreshRuns.id, id)).get();
+export async function getRun(id: string): Promise<RunView | null> {
+  const rows = await getDb().select().from(refreshRuns).where(eq(refreshRuns.id, id));
+  const row = rows[0];
   return row ? toRunView(row) : null;
 }
 
-export function latestRun(): RunView | null {
-  const row = getDb().select().from(refreshRuns).orderBy(desc(refreshRuns.startedAt)).limit(1).get();
+export async function latestRun(): Promise<RunView | null> {
+  const rows = await getDb().select().from(refreshRuns).orderBy(desc(refreshRuns.startedAt)).limit(1);
+  const row = rows[0];
   return row ? toRunView(row) : null;
 }
 
-function writeProgress(runId: string, progress: Progress): void {
-  getDb()
+async function writeProgress(runId: string, progress: Progress): Promise<void> {
+  await getDb()
     .update(refreshRuns)
     .set({ progress: JSON.stringify(progress) })
-    .where(eq(refreshRuns.id, runId))
-    .run();
+    .where(eq(refreshRuns.id, runId));
 }
 
 export async function currentUsage(): Promise<UsageView | null> {
@@ -142,7 +143,7 @@ export async function startRefresh(options: { trigger: Trigger; roleIds?: string
   const now = Date.now();
 
   if (options.trigger === "visit") {
-    const remaining = cooldownRemaining(now);
+    const remaining = await cooldownRemaining(now);
     if (remaining > 0) return { started: false, reason: "cooldown", retryInMs: remaining };
   }
 
@@ -151,21 +152,22 @@ export async function startRefresh(options: { trigger: Trigger; roleIds?: string
     return { started: false, reason: "unavailable", message: "No job board scrapers are available." };
   }
 
-  const enabled = listRoles()
+  const allRoles = await listRoles();
+  const enabled = allRoles
     .filter((r) => r.enabled)
     .filter((r) => !options.roleIds || options.roleIds.includes(r.id))
     .map(toRoleView);
   if (enabled.length === 0) return { started: false, reason: "no_roles" };
 
   const id = randomUUID();
-  const lock = acquireLock(id, now);
+  const lock = await acquireLock(id, now);
   if (!lock.acquired) {
-    const holder = getRun(lock.heldBy);
+    const holder = await getRun(lock.heldBy);
     if (holder) return { started: false, reason: "running", run: holder };
   }
 
   const progress: Progress = Object.fromEntries(enabled.map((r) => [r.id, { state: "searching" }]));
-  getDb()
+  await getDb()
     .insert(refreshRuns)
     .values({
       id,
@@ -176,22 +178,21 @@ export async function startRefresh(options: { trigger: Trigger; roleIds?: string
       progress: JSON.stringify(progress),
       usedDefaultKey: true,
       error: null,
-    })
-    .run();
+    });
 
   const task = processScraperRun(id, enabled, progress).catch((error: unknown) => {
-    finishRun(id, "failed", scrub(error instanceof Error ? error.message : "Something went wrong."));
+    void finishRun(id, "failed", scrub(error instanceof Error ? error.message : "Something went wrong."));
   });
   inflight.set(id, task.finally(() => inflight.delete(id)));
 
-  return { started: true, run: getRun(id)! };
+  return { started: true, run: (await getRun(id))! };
 }
 
 export async function runRefreshAndWait(options: { trigger: Trigger; roleIds?: string[] }): Promise<StartResult> {
   const result = await startRefresh(options);
   if (result.started) {
     await waitForRun(result.run.id);
-    return { started: true, run: getRun(result.run.id)! };
+    return { started: true, run: (await getRun(result.run.id))! };
   }
   return result;
 }
@@ -199,7 +200,7 @@ export async function runRefreshAndWait(options: { trigger: Trigger; roleIds?: s
 async function processScraperRun(runId: string, roles: RoleView[], progress: Progress): Promise<void> {
   const started = Date.now();
   try {
-    const scope = getScope();
+    const scope = await getScope();
 
     // Collect all search keywords from roles
     const allKeywords = roles.flatMap((r) => [
@@ -222,8 +223,6 @@ async function processScraperRun(runId: string, roles: RoleView[], progress: Pro
     // Step 1: Link checking
     let kept = listings;
     let droppedGone = 0;
-    let verified = 0;
-    let unverified = 0;
 
     const shouldCheckLinks = process.env.USE_MOCK_PROVIDER !== "1" && process.env.NODE_ENV !== "test";
     if (listings.length > 0 && shouldCheckLinks) {
@@ -238,19 +237,19 @@ async function processScraperRun(runId: string, roles: RoleView[], progress: Pro
           droppedGone += 1;
           continue;
         }
-        if (status === "verified") verified += 1;
-        else unverified += 1;
         kept.push({ ...listing, linkStatus: status });
       }
     }
 
     // Step 2: Sponsor register matching
-    const hasSponsors = registerStatus().available;
+    const hasSponsors = (await registerStatus()).available;
     if (hasSponsors) {
-      kept = kept.map((listing) => {
-        const match = matchSponsor(listing.org, listing.locationNorm);
-        return match ? { ...listing, licensedSponsor: true, sponsorMatchName: match.name } : listing;
-      });
+      const matchedKept: NormalisedListing[] = [];
+      for (const listing of kept) {
+        const match = await matchSponsor(listing.org, listing.locationNorm);
+        matchedKept.push(match ? { ...listing, licensedSponsor: true, sponsorMatchName: match.name } : listing);
+      }
+      kept = matchedKept;
     }
 
     // Step 3: Distribute listings to roles and merge
@@ -270,7 +269,7 @@ async function processScraperRun(runId: string, roles: RoleView[], progress: Pro
 
     for (const role of roles) {
       const roleListings = listingsByRole.get(role.id) ?? [];
-      const mergeRes = mergeListings(roleListings, {
+      const mergeRes = await mergeListings(roleListings, {
         roleId: role.id,
         now: mergeNow,
         provider: "scrapers",
@@ -302,12 +301,12 @@ async function processScraperRun(runId: string, roles: RoleView[], progress: Pro
       };
     }
 
-    writeProgress(runId, progress);
+    await writeProgress(runId, progress);
 
     const finishedAt = Date.now();
-    applyRetention(finishedAt);
-    markRefreshCompleted(finishedAt);
-    finishRun(runId, "done", null, finishedAt);
+    await applyRetention(finishedAt);
+    await markRefreshCompleted(finishedAt);
+    await finishRun(runId, "done", null, finishedAt);
 
     log.info(
       "scrapers",
@@ -320,19 +319,18 @@ async function processScraperRun(runId: string, roles: RoleView[], progress: Pro
         progress[role.id] = { state: "error", error: describe(error) };
       }
     }
-    writeProgress(runId, progress);
-    finishRun(runId, "failed", describe(error));
+    await writeProgress(runId, progress);
+    await finishRun(runId, "failed", describe(error));
   } finally {
-    releaseLock(runId);
+    await releaseLock(runId);
   }
 }
 
-function finishRun(runId: string, status: "done" | "failed", error: string | null, finishedAt: number = Date.now()): void {
-  getDb()
+async function finishRun(runId: string, status: "done" | "failed", error: string | null, finishedAt: number = Date.now()): Promise<void> {
+  await getDb()
     .update(refreshRuns)
     .set({ status, error, finishedAt })
-    .where(eq(refreshRuns.id, runId))
-    .run();
+    .where(eq(refreshRuns.id, runId));
 }
 
 export function describe(error: unknown): string {

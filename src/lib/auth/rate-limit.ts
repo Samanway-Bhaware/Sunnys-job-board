@@ -1,5 +1,6 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
+import { ensureMigrated } from "@/lib/db/migrate-runtime";
 import { loginAttempts } from "@/lib/db/schema";
 
 /** Brief section 2.1: 5 failures per 15 minutes per IP, then 429. */
@@ -18,16 +19,16 @@ function windowStart(now: number): number {
 }
 
 /** Whether this IP may attempt a login right now. Does not record anything. */
-export function checkRateLimit(ip: string, now: number = Date.now()): RateLimitState {
+export async function checkRateLimit(ip: string, now: number = Date.now()): Promise<RateLimitState> {
+  await ensureMigrated();
   const db = getDb();
   const since = windowStart(now);
 
-  const rows = db
+  const rows = await db
     .select({ attemptedAt: loginAttempts.attemptedAt })
     .from(loginAttempts)
     .where(and(eq(loginAttempts.ip, ip), gte(loginAttempts.attemptedAt, since)))
-    .orderBy(loginAttempts.attemptedAt)
-    .all();
+    .orderBy(loginAttempts.attemptedAt);
 
   const failures = rows.length;
   if (failures < MAX_FAILURES) {
@@ -44,30 +45,26 @@ export function checkRateLimit(ip: string, now: number = Date.now()): RateLimitS
   };
 }
 
-export function recordFailure(ip: string, now: number = Date.now()): void {
+export async function recordFailure(ip: string, now: number = Date.now()): Promise<void> {
+  await ensureMigrated();
   const db = getDb();
-  db.insert(loginAttempts).values({ ip, attemptedAt: now }).run();
+  await db.insert(loginAttempts).values({ ip, attemptedAt: now });
 
   // Opportunistic cleanup so the table cannot grow without bound.
-  db.delete(loginAttempts)
-    .where(sql`${loginAttempts.attemptedAt} < ${windowStart(now)}`)
-    .run();
+  await db.delete(loginAttempts)
+    .where(sql`${loginAttempts.attemptedAt} < ${windowStart(now)}`);
 }
 
 /** A correct password clears that IP's failure history. */
-export function clearFailures(ip: string): void {
-  getDb().delete(loginAttempts).where(eq(loginAttempts.ip, ip)).run();
+export async function clearFailures(ip: string): Promise<void> {
+  await ensureMigrated();
+  await getDb().delete(loginAttempts).where(eq(loginAttempts.ip, ip));
 }
 
 function waitPhrase(retryAfterSeconds: number): string {
   const minutes = Math.ceil(retryAfterSeconds / 60);
   return minutes <= 1 ? "about a minute" : `about ${minutes} minutes`;
 }
-
-/**
- * Plain-language messages (brief section 2.10: say what happened and what to do
- * next). Neither message reveals whether the attempted password was close.
- */
 
 /** Shown when an attempt is refused before the password is even checked. */
 export function rateLimitMessage(retryAfterSeconds: number): string {

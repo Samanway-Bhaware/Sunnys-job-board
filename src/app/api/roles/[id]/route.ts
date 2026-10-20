@@ -19,11 +19,12 @@ export const PATCH = protectedRoute(async (request, { params }) => {
   const body = await readJson(request, Patch);
   if (isResponse(body)) return body;
 
-  return NextResponse.json({ ok: true, role: toRoleView(updateRole(id!, body)) });
+  const role = await updateRole(id!, body);
+  return NextResponse.json({ ok: true, role: toRoleView(role) });
 });
 
 export const DELETE = protectedRoute(async (_request, { params }) => {
   const { id } = await params;
-  const outcome = deleteRole(id!);
+  const outcome = await deleteRole(id!);
   return NextResponse.json({ ok: true, outcome });
 });

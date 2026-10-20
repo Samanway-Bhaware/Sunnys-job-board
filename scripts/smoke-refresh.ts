@@ -16,11 +16,11 @@ import { configuredScrapers } from "@/lib/scrapers";
 
 async function main(): Promise<void> {
   assertEnv();
-  runMigrations();
-  seedDatabase();
+  await runMigrations();
+  await seedDatabase();
 
   const activeScrapers = configuredScrapers().map((s) => s.name);
-  const roles = new Map(listRoles().map((r) => [r.id, r.name]));
+  const roles = new Map((await listRoles()).map((r) => [r.id, r.name]));
 
   console.log(`Active scrapers: ${activeScrapers.join(", ")}`);
   console.log(`Roles: ${[...roles.values()].join(", ")}\n`);
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   }
 
   console.log("\nListings now on the board:");
-  const jobs = listJobs();
+  const jobs = await listJobs();
   for (const j of jobs.slice(0, 15)) {
     console.log(`  - [${j.source}] ${j.org} — ${j.title} (${j.locationText}) · ${j.linkStatus}\n      ${j.url}`);
   }

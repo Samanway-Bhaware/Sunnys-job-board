@@ -90,9 +90,9 @@ vi.spyOn(scrapersModule, "scrapeAll").mockImplementation(async () => ({
   totalDurationMs: 50,
 }));
 
-beforeEach(() => {
-  resetTables();
-  seedDatabase();
+beforeEach(async () => {
+  await resetTables();
+  await seedDatabase();
 });
 
 async function runOk(trigger: Trigger): Promise<RunView> {
@@ -106,22 +106,22 @@ describe("refresh with scrapers", () => {
     const run = await runOk("manual");
 
     expect(run.status).toBe("done");
-    const roles = listRoles();
+    const roles = await listRoles();
     expect(Object.keys(run.progress).sort()).toEqual(roles.map((r) => r.id).sort());
     for (const p of Object.values(run.progress)) {
       expect(p.state).toBe("done");
     }
 
-    const jobs = listJobs();
+    const jobs = await listJobs();
     expect(jobs.length).toBeGreaterThanOrEqual(3);
 
-    expect(getSettings().seenUpTo).toBe(run.finishedAt);
-    expect(getSettings().lastRefreshAt).toBe(run.finishedAt);
+    expect((await getSettings()).seenUpTo).toBe(run.finishedAt);
+    expect((await getSettings()).lastRefreshAt).toBe(run.finishedAt);
   });
 
   it("normalises listing fields the way the filters expect", async () => {
     await runOk("manual");
-    const jobs = listJobs();
+    const jobs = await listJobs();
     const byOrg = (org: string) => jobs.find((j) => j.org === org)!;
 
     expect(byOrg("Creative Fund Scotland")).toMatchObject({
@@ -142,9 +142,9 @@ describe("refresh with scrapers", () => {
   });
 
   it("skips disabled roles", async () => {
-    const [first] = listRoles();
+    const [first] = await listRoles();
     const { updateRole } = await import("@/lib/roles");
-    updateRole(first!.id, { enabled: false });
+    await updateRole(first!.id, { enabled: false });
 
     const run = await runOk("visit");
     expect(run.progress[first!.id]).toBeUndefined();
@@ -153,9 +153,9 @@ describe("refresh with scrapers", () => {
 
   it("is idempotent across runs — a second run adds nothing", async () => {
     await runOk("manual");
-    const before = listJobs().length;
+    const before = (await listJobs()).length;
     const second = await runOk("manual");
-    expect(listJobs()).toHaveLength(before);
+    expect(await listJobs()).toHaveLength(before);
     expect(second.status).toBe("done");
   });
 

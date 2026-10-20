@@ -8,6 +8,7 @@ import {
   lockoutAfterFailureMessage,
   rateLimitMessage,
   recordFailure,
+  type RateLimitState,
 } from "@/lib/auth/rate-limit";
 import { clientIp } from "@/lib/auth/request";
 import {
@@ -15,6 +16,7 @@ import {
   createSessionToken,
   sessionCookieOptions,
 } from "@/lib/auth/session";
+import { log } from "@/lib/log";
 
 // Passwords must never be cached or prerendered.
 export const dynamic = "force-dynamic";
@@ -22,6 +24,31 @@ export const dynamic = "force-dynamic";
 const LoginBody = z.object({
   password: z.string().min(1).max(512),
 });
+
+async function safeCheckRateLimit(ip: string): Promise<RateLimitState> {
+  try {
+    return await checkRateLimit(ip);
+  } catch (error) {
+    log.error("auth", "Rate limit check failed; allowing login attempt", error);
+    return { allowed: true, failures: 0, retryAfterSeconds: 0 };
+  }
+}
+
+async function safeRecordFailure(ip: string): Promise<void> {
+  try {
+    await recordFailure(ip);
+  } catch (error) {
+    log.error("auth", "Recording failed login attempt failed", error);
+  }
+}
+
+async function safeClearFailures(ip: string): Promise<void> {
+  try {
+    await clearFailures(ip);
+  } catch (error) {
+    log.error("auth", "Clearing login failures failed", error);
+  }
+}
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!hasValidOrigin(request)) {
@@ -35,7 +62,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // Rate limit is checked *before* the password is verified, so a blocked IP
   // learns nothing about whether its guess was right.
-  const limit = checkRateLimit(ip);
+  const limit = await safeCheckRateLimit(ip);
   if (!limit.allowed) {
     return NextResponse.json(
       { ok: false, message: rateLimitMessage(limit.retryAfterSeconds) },
@@ -52,7 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const parsed = LoginBody.safeParse(body);
   if (!parsed.success) {
-    recordFailure(ip);
+    await safeRecordFailure(ip);
     return NextResponse.json(
       { ok: false, message: "Enter the password to continue." },
       { status: 400 },
@@ -60,12 +87,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (!verifyPassword(parsed.data.password)) {
-    recordFailure(ip);
+    await safeRecordFailure(ip);
 
     // This failure still counts as one of the allowed attempts, so it is a 401.
     // The 429 comes from the pre-check on the *next* request. Telling her here
     // that she has run out is kinder than letting the next attempt surprise her.
-    const after = checkRateLimit(ip);
+    const after = await safeCheckRateLimit(ip);
     return NextResponse.json(
       {
         ok: false,
@@ -77,7 +104,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  clearFailures(ip);
+  await safeClearFailures(ip);
 
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE_NAME, createSessionToken(), sessionCookieOptions());

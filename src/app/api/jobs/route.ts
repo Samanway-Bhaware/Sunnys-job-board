@@ -11,21 +11,29 @@ export const dynamic = "force-dynamic";
 
 /** Everything the board needs on load. Filters are applied in the browser. */
 export const GET = protectedRoute(async () => {
-  const settings = getSettings();
-  const run = latestRun();
+  const [settings, run, allJobs, allRoles, scope, register, cooldownRemainingMs, usage] = await Promise.all([
+    getSettings(),
+    latestRun(),
+    listJobs(),
+    listRoles({ includeArchived: true }),
+    getScope(),
+    registerStatus(),
+    cooldownRemaining(),
+    currentUsage(),
+  ]);
 
   return NextResponse.json({
     ok: true,
-    jobs: listJobs().map(toJobView),
-    roles: listRoles({ includeArchived: true }).map(toRoleView),
-    scope: getScope(),
+    jobs: allJobs.map(toJobView),
+    roles: allRoles.map(toRoleView),
+    scope,
     /** The client reads this once as `newSince` (brief section 2.5, "New" badge). */
     seenUpTo: settings.seenUpTo,
     lastRefreshAt: settings.lastRefreshAt,
     activeRun: run && run.status === "running" ? run : null,
     lastRun: run,
-    usage: await currentUsage(),
-    register: registerStatus(),
-    cooldownRemainingMs: cooldownRemaining(),
+    usage,
+    register,
+    cooldownRemainingMs,
   });
 });

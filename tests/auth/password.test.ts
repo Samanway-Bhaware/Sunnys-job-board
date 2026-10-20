@@ -36,4 +36,17 @@ describe("password", () => {
 
     expect(after).not.toBe(before);
   });
+
+  it("strips wrapping single or double quotes from SITE_PASSWORD", () => {
+    process.env.SITE_PASSWORD = "'Sunnynunny'";
+    resetEnvCache();
+    expect(verifyPassword("Sunnynunny")).toBe(true);
+
+    process.env.SITE_PASSWORD = '"Sunnynunny"';
+    resetEnvCache();
+    expect(verifyPassword("Sunnynunny")).toBe(true);
+
+    process.env.SITE_PASSWORD = "correct-horse-battery-staple";
+    resetEnvCache();
+  });
 });

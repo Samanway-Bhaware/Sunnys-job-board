@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 import { requireSession } from "@/lib/auth/guard";
+import { ensureMigrated } from "@/lib/db/migrate-runtime";
+import { ensureSeeded } from "@/lib/db/seed";
 import { log } from "@/lib/log";
 
 /** Small helpers shared by every route handler. */
@@ -40,6 +42,11 @@ export function protectedRoute(handler: Handler): Handler {
     const denied = requireSession(request);
     if (denied) return denied;
     try {
+      if (process.env.NODE_ENV === "test") {
+        await ensureMigrated();
+      } else {
+        await ensureSeeded();
+      }
       return await handler(request, ctx);
     } catch (error) {
       if (error instanceof Error) {

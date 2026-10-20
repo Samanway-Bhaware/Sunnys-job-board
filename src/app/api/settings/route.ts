@@ -11,7 +11,14 @@ import { registerStatus } from "@/lib/sponsor/register";
 export const dynamic = "force-dynamic";
 
 export const GET = protectedRoute(async () => {
-  const row = getSettings();
+  const [row, scope, lastRun, register, usage] = await Promise.all([
+    getSettings(),
+    getScope(),
+    latestRun(),
+    registerStatus(),
+    currentUsage(),
+  ]);
+
   const env = getEnv();
   const scrapers = ALL_SCRAPERS.map((s) => ({
     id: s.id,
@@ -22,7 +29,7 @@ export const GET = protectedRoute(async () => {
 
   return NextResponse.json({
     ok: true,
-    scope: getScope(),
+    scope,
     provider: "scrapers",
     model: null,
     seenUpTo: row.seenUpTo,
@@ -31,9 +38,9 @@ export const GET = protectedRoute(async () => {
     scrapers,
     cooldownMinutes: env.REFRESH_COOLDOWN_MINUTES,
     dailyCap: 0,
-    usage: await currentUsage(),
-    lastRun: latestRun(),
-    register: registerStatus(),
+    usage,
+    lastRun,
+    register,
   });
 });
 
@@ -48,5 +55,6 @@ const ScopePatch = z
 export const PATCH = protectedRoute(async (request) => {
   const body = await readJson(request, ScopePatch);
   if (isResponse(body)) return body;
-  return NextResponse.json({ ok: true, scope: updateScope(body) });
+  const scope = await updateScope(body);
+  return NextResponse.json({ ok: true, scope });
 });

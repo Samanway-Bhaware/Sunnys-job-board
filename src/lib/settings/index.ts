@@ -12,12 +12,13 @@ export const DEFAULT_SCOPE: ScopeView = {
 
 const SETTINGS_ID = 1;
 
-export function ensureSettings(now: number = Date.now()): SettingsRow {
+export async function ensureSettings(now: number = Date.now()): Promise<SettingsRow> {
   const db = getDb();
-  const existing = db.select().from(settings).where(eq(settings.id, SETTINGS_ID)).get();
+  const existing = (await db.select().from(settings).where(eq(settings.id, SETTINGS_ID)))[0];
   if (existing) return existing;
 
-  db.insert(settings)
+  await db
+    .insert(settings)
     .values({
       id: SETTINGS_ID,
       sector: DEFAULT_SCOPE.sector,
@@ -29,12 +30,13 @@ export function ensureSettings(now: number = Date.now()): SettingsRow {
       lastRefreshAt: null,
       updatedAt: now,
     })
-    .run();
+    .onConflictDoNothing();
 
-  return db.select().from(settings).where(eq(settings.id, SETTINGS_ID)).get()!;
+  const row = (await db.select().from(settings).where(eq(settings.id, SETTINGS_ID)))[0];
+  return row!;
 }
 
-export function getSettings(): SettingsRow {
+export async function getSettings(): Promise<SettingsRow> {
   return ensureSettings();
 }
 
@@ -47,14 +49,14 @@ export function parseLocations(raw: string): string[] {
   }
 }
 
-export function getScope(): ScopeView {
-  const row = getSettings();
+export async function getScope(): Promise<ScopeView> {
+  const row = await getSettings();
   return { sector: row.sector, locations: parseLocations(row.locations), notes: row.notes };
 }
 
-export function updateScope(scope: ScopeView, now: number = Date.now()): ScopeView {
-  ensureSettings(now);
-  getDb()
+export async function updateScope(scope: ScopeView, now: number = Date.now()): Promise<ScopeView> {
+  await ensureSettings(now);
+  await getDb()
     .update(settings)
     .set({
       sector: scope.sector,
@@ -62,26 +64,23 @@ export function updateScope(scope: ScopeView, now: number = Date.now()): ScopeVi
       notes: scope.notes,
       updatedAt: now,
     })
-    .where(eq(settings.id, SETTINGS_ID))
-    .run();
+    .where(eq(settings.id, SETTINGS_ID));
   return getScope();
 }
 
-export function setProviderAndModel(provider: string, model: string | null, now = Date.now()): void {
-  ensureSettings(now);
-  getDb()
+export async function setProviderAndModel(provider: string, model: string | null, now = Date.now()): Promise<void> {
+  await ensureSettings(now);
+  await getDb()
     .update(settings)
     .set({ provider, model, updatedAt: now })
-    .where(eq(settings.id, SETTINGS_ID))
-    .run();
+    .where(eq(settings.id, SETTINGS_ID));
 }
 
 /** Called when a refresh completes: the next visit's "New" badges are measured from here. */
-export function markRefreshCompleted(finishedAt: number): void {
-  ensureSettings(finishedAt);
-  getDb()
+export async function markRefreshCompleted(finishedAt: number): Promise<void> {
+  await ensureSettings(finishedAt);
+  await getDb()
     .update(settings)
     .set({ seenUpTo: finishedAt, lastRefreshAt: finishedAt, updatedAt: finishedAt })
-    .where(eq(settings.id, SETTINGS_ID))
-    .run();
+    .where(eq(settings.id, SETTINGS_ID));
 }
