@@ -1,0 +1,84 @@
+{
+ "id": "msg_01fixture",
+ "type": "message",
+ "role": "assistant",
+ "model": "claude-sonnet-5",
+ "content": [
+  {
+   "type": "text",
+   "text": "I'll search for current communications roles."
+  },
+  {
+   "type": "server_tool_use",
+   "id": "srvtoolu_01A",
+   "name": "web_search",
+   "input": {
+    "query": "communications officer arts Edinburgh part time"
+   }
+  },
+  {
+   "type": "web_search_tool_result",
+   "tool_use_id": "srvtoolu_01A",
+   "content": [
+    {
+     "type": "web_search_result",
+     "url": "https://www.goodmoves.example/vacancy/press-communications-manager",
+     "title": "Press and Communications Manager - Forth Festival",
+     "encrypted_content": "EqgfCioIARgBIiQ3YTAw\u2026",
+     "page_age": "September 10, 2026"
+    },
+    {
+     "type": "web_search_result",
+     "url": "https://jobs.northlight-theatre.example/vacancies/communications-officer",
+     "title": "Communications Officer | Northlight Theatre",
+     "encrypted_content": "EqgfCioIARgBIiQ3YTAw\u2026",
+     "page_age": "September 10, 2026"
+    },
+    {
+     "type": "web_search_result",
+     "url": "https://www.artsjobs.example/listing/unrelated-listing",
+     "title": "Unrelated listing",
+     "encrypted_content": "EqgfCioIARgBIiQ3YTAw\u2026",
+     "page_age": "September 10, 2026"
+    }
+   ]
+  },
+  {
+   "type": "server_tool_use",
+   "id": "srvtoolu_01B",
+   "name": "web_search",
+   "input": {
+    "query": "communications coordinator gallery Edinburgh"
+   }
+  },
+  {
+   "type": "web_search_tool_result",
+   "tool_use_id": "srvtoolu_01B",
+   "content": [
+    {
+     "type": "web_search_result",
+     "url": "https://www.artsjobs.example/listing/harbour-gallery-comms",
+     "title": "Communications Coordinator - Harbour Gallery",
+     "encrypted_content": "EqgfCioIARgBIiQ3YTAw\u2026",
+     "page_age": "September 10, 2026"
+    }
+   ]
+  },
+  {
+   "type": "text",
+   "text": "Here are the open listings I found that match:\n\n[{\"org\": \"Northlight Theatre Company\", \"title\": \"Communications Officer\", \"location\": \"Glasgow (hybrid)\", \"work_mode\": \"hybrid\", \"contract\": \"part_time\", \"hours\": \"3 days/wk\", \"salary\": \"\\u00a328,000 \\u2013 \\u00a331,000 pro rata\", \"sponsorship\": \"not_stated\", \"sponsorship_evidence\": \"\", \"posted\": \"2026-09-08\", \"closing\": \"2026-09-30\", \"url\": \"https://jobs.northlight-theatre.example/vacancies/communications-officer?utm_source=goodmoves\", \"source\": \"Goodmoves\"}, {\"org\": \"Forth Festival\", \"title\": \"Press and Communications Manager\", \"location\": \"Edinburgh\", \"work_mode\": \"onsite\", \"contract\": \"full_time\", \"hours\": \"Full-time\", \"salary\": \"\\u00a334,000\", \"sponsorship\": \"not_offered\", \"sponsorship_evidence\": \"must have the right to work in the UK\", \"posted\": \"2026-09-02\", \"closing\": \"2026-09-25\", \"url\": \"https://www.goodmoves.example/vacancy/press-communications-manager\", \"source\": \"Goodmoves\"}]\n\nLet me know if you'd like me to widen the search."
+  }
+ ],
+ "stop_reason": "end_turn",
+ "stop_sequence": null,
+ "usage": {
+  "input_tokens": 6039,
+  "output_tokens": 931,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "server_tool_use": {
+   "web_search_requests": 2
+  },
+  "service_tier": "standard"
+ }
+}

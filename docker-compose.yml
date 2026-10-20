@@ -1,0 +1,16 @@
+services:
+  jobboard:
+    build: .
+    container_name: jobboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /data/jobs.db
+    volumes:
+      - jobboard-data:/data
+
+volumes:
+  jobboard-data:

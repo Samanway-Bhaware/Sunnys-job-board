@@ -1,0 +1,17 @@
+node_modules
+.next
+data
+*.db
+*.db-*
+.env
+.env.*
+!.env.example
+tests
+e2e
+reference
+docs
+playwright-report
+test-results
+coverage
+.git
+.DS_Store

@@ -1,0 +1,165 @@
+/*
+ * Exact design tokens and base styles from https://freehire.me (strelov1/freehire).
+ */
+:root {
+  color-scheme: light;
+  --background: oklch(99.7% 0.003 130);
+  --foreground: oklch(13% 0 0);
+  --card: oklch(100% 0 0);
+  --card-foreground: oklch(13% 0 0);
+  --popover: oklch(100% 0 0);
+  --popover-foreground: oklch(13% 0 0);
+  --primary: oklch(13% 0 0);
+  --primary-foreground: oklch(100% 0 0);
+  --secondary: oklch(95.5% 0 0);
+  --secondary-foreground: oklch(13% 0 0);
+  --muted: oklch(95.5% 0 0);
+  --muted-foreground: oklch(43% 0 0);
+  --accent: oklch(93% 0 0);
+  --accent-foreground: oklch(13% 0 0);
+  --destructive: oklch(57.7% 0.245 27.325);
+  --destructive-foreground: oklch(98.5% 0 0);
+  --border: oklch(92% 0 0);
+  --input: oklch(93% 0 0);
+  --ring: #b2c248;
+  --brand: #5b6f00;
+  --brand-foreground: #f3f6e2;
+  --brand-strong: #4c5c00;
+  --brand-muted: #e5eacd;
+  --brand-ring: #b2c248;
+  --warning: oklch(76.9% 0.188 70.08);
+  --warning-foreground: oklch(27.9% 0.077 45.635);
+  --warning-strong: oklch(55.5% 0.163 48.998);
+  --warning-muted: oklch(96.2% 0.059 95.617);
+
+  /* Compatibility aliases for existing modules */
+  --mist: var(--background);
+  --surface-subtle: var(--secondary);
+  --paper: var(--card);
+  --ink: var(--foreground);
+  --slate: var(--muted-foreground);
+  --rule: var(--border);
+  --rule-strong: var(--input);
+  --thistle: var(--brand-strong);
+  --thistle-soft: var(--brand-muted);
+  --green: var(--brand-strong);
+  --green-soft: var(--brand-muted);
+  --amber: var(--warning-strong);
+  --amber-soft: var(--warning-muted);
+  --alert: var(--destructive);
+  --alert-soft: oklch(96% 0.03 27);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius: 0.625rem;
+  --radius-sm: calc(0.625rem * 0.6);
+  --radius-md: calc(0.625rem * 0.8);
+  --radius-lg: 0.625rem;
+  --radius-xl: calc(0.625rem * 1.4);
+
+  --shadow-sm: 0px 1px 2px 0px oklch(0% 0 0 / 0.05);
+  --shadow-md: 0px 2px 4px 0px oklch(0% 0 0 / 0.1);
+  --shadow-lg: 0px 4px 12px 0px oklch(0% 0 0 / 0.15);
+  --shadow-xl: 0px 8px 24px 0px oklch(0% 0 0 / 0.2);
+
+  accent-color: var(--brand);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(16% 0.006 110);
+  --foreground: oklch(98.5% 0 0);
+  --card: oklch(15.5% 0 0);
+  --card-foreground: oklch(98.5% 0 0);
+  --popover: oklch(21% 0 0);
+  --popover-foreground: oklch(98.5% 0 0);
+  --primary: oklch(98.5% 0 0);
+  --primary-foreground: oklch(15.5% 0 0);
+  --secondary: oklch(31% 0 0);
+  --secondary-foreground: oklch(98.5% 0 0);
+  --muted: oklch(24% 0 0);
+  --muted-foreground: oklch(72% 0 0);
+  --accent: oklch(27% 0 0);
+  --accent-foreground: oklch(98.5% 0 0);
+  --destructive: oklch(70.4% 0.191 22.216);
+  --destructive-foreground: oklch(16% 0 0);
+  --border: oklch(100% 0 0 / 0.08);
+  --input: oklch(100% 0 0 / 0.12);
+  --ring: oklch(60% 0.09 118);
+  --brand: oklch(72% 0.095 121);
+  --brand-foreground: oklch(18% 0.02 120);
+  --brand-strong: oklch(79% 0.1 118);
+  --brand-muted: oklch(31% 0.045 118);
+  --brand-ring: oklch(60% 0.09 118);
+  --warning: oklch(82.8% 0.189 84.429);
+  --warning-foreground: oklch(27.9% 0.077 45.635);
+  --warning-strong: oklch(82.8% 0.189 84.429);
+  --warning-muted: oklch(27.9% 0.077 45.635);
+  --alert-soft: oklch(25% 0.06 25);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--brand-muted);
+  color: var(--brand-strong);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: start;
+  min-height: 100svh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+}
+
+input:user-invalid,
+textarea:user-invalid,
+select:user-invalid {
+  border-color: var(--destructive);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

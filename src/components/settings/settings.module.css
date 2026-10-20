@@ -1,0 +1,487 @@
+/* Exact FreeHire UI styles for Settings */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+
+.topbarInner {
+  max-width: 72rem;
+  margin: 0 auto;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 1rem;
+}
+
+.topbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.brandLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.brandIcon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.navDivider {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.siteNav {
+  display: flex;
+  align-items: center;
+  gap: 1.125rem;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.navLink:hover,
+.navLinkActive {
+  color: var(--foreground);
+}
+
+.navIcon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.wrap {
+  flex: 1;
+  width: 100%;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.eyebrow {
+  margin: 0 0 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted-foreground);
+}
+
+.top h1 {
+  font-weight: 600;
+  font-size: clamp(1.5rem, 1.25rem + 1vw, 2rem);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin: 0;
+  color: var(--foreground);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--brand-strong);
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+}
+
+.back:hover {
+  color: var(--foreground);
+}
+
+.section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.section h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--foreground);
+}
+
+.subhead {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted-foreground);
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.field {
+  display: grid;
+  gap: 0.375rem;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  color: var(--foreground);
+}
+
+.field span {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.select {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.4375rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  max-width: 100%;
+}
+
+.field input,
+.field textarea {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 400;
+  padding: 0.5rem 0.6875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  resize: vertical;
+  transition: border-color 0.15s ease;
+}
+
+.field input:hover,
+.field textarea:hover {
+  border-color: var(--ring);
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding-top: 0.125rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.6875rem;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.pillX {
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  padding: 0.125rem 0.3125rem;
+  border-radius: 9999px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.pillX:hover {
+  color: var(--destructive);
+  background: var(--alert-soft);
+}
+
+.addRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.addRow input {
+  flex: 1 1 12.5rem;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.4375rem 0.6875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  transition: border-color 0.15s ease;
+}
+
+.addRow input:hover {
+  border-color: var(--ring);
+}
+
+.actions {
+  display: flex;
+  gap: 0.625rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: var(--brand);
+  color: var(--brand-foreground);
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.ghost {
+  background: var(--background);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  opacity: 1;
+}
+
+.danger {
+  background: var(--background);
+  color: var(--destructive);
+  border-color: var(--border);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--alert-soft);
+  border-color: var(--destructive);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.small {
+  height: 1.875rem;
+  padding: 0 0.625rem;
+  font-size: 0.75rem;
+}
+
+.msg {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.ok {
+  color: var(--brand-strong);
+}
+
+.err {
+  color: var(--destructive);
+}
+
+.roleList {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.role {
+  display: grid;
+  grid-template-columns: 0.625rem 1fr auto;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+}
+
+.roleDot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  margin-top: 0.6875rem;
+}
+
+.roleFields {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.roleFields input:not([type="checkbox"]) {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--card);
+  color: var(--foreground);
+  width: 100%;
+}
+
+.roleTools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  align-items: flex-end;
+}
+
+.roleTools .btn {
+  white-space: nowrap;
+}
+
+.disabledRole {
+  opacity: 0.55;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.sourceList,
+.scrapeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.sourceItem,
+.scrapeItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.sourceName {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.sourceMeta {
+  color: var(--muted-foreground);
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.375rem;
+}
+
+.statusActive {
+  background: var(--brand-muted);
+  color: var(--brand-strong);
+}
+
+.statusPending {
+  background: var(--warning-muted);
+  color: var(--warning-foreground);
+}
+
+.scrapeSummary {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+@media (max-width: 880px) {
+  .role {
+    grid-template-columns: 0.625rem 1fr;
+  }
+  .roleTools {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}
