@@ -42,6 +42,20 @@ function orgMonogram(name: string): string {
   return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toUpperCase();
 }
 
+function formatSource(source: string): string {
+  if (!source) return "";
+  const s = source.toLowerCase().trim();
+  if (s.includes("freehire (") && s.endsWith(")")) {
+    const inner = source.replace(/freehire\s*\(([^)]+)\)/i, "$1").trim();
+    return inner.charAt(0).toUpperCase() + inner.slice(1);
+  }
+  if (s === "freehire") return "FreeHire";
+  if (s === "reed") return "Reed";
+  if (s === "artsjobs") return "Arts Jobs";
+  if (s === "guardian") return "Guardian Jobs";
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}
+
 export default function JobRow({ job, role, showCategory, isNew, today, onStatus, onNotes }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(job.notes);
@@ -61,12 +75,7 @@ export default function JobRow({ job, role, showCategory, isNew, today, onStatus
   }
 
   const hours = job.hoursText || (job.contract === "full_time" ? "Full-time" : job.contract === "part_time" ? "Part-time" : "");
-  const displaySource = job.source
-    ? job.source
-        .replace(/freehire\s*\(([^)]+)\)/i, "$1")
-        .replace(/\bfreehire\b/gi, "")
-        .trim()
-    : "";
+  const displaySource = formatSource(job.source);
   const displayEvidence = job.sponsorshipEvidence
     ? job.sponsorshipEvidence.replace(/\s*\(freehire\)/gi, "").trim()
     : "";

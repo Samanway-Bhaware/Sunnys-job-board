@@ -12,8 +12,16 @@ import { log } from "@/lib/log";
 
 import type { ScrapedJob, Scraper, ScrapeQuery, ScraperResult } from "./types";
 import { freehireScraper } from "./freehire";
+import { reedScraper } from "./reed";
+import { artsJobsScraper } from "./artsjobs";
+import { guardianJobsScraper } from "./guardian";
 
-export const ALL_SCRAPERS: Scraper[] = [freehireScraper];
+export const ALL_SCRAPERS: Scraper[] = [
+  freehireScraper,
+  reedScraper,
+  artsJobsScraper,
+  guardianJobsScraper,
+];
 
 export function configuredScrapers(): Scraper[] {
   return ALL_SCRAPERS.filter((s) => s.isConfigured());

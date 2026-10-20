@@ -25,5 +25,6 @@ test-results/
 # OS / editor
 .DS_Store
 *.log
+*.tsbuildinfo
 .idea/
 .vscode/

@@ -42,6 +42,9 @@ const EnvSchema = z.object({
   FREEHIRE_API_URL: z.string().url().default("https://freehire.me/api/v1"),
   FREEHIRE_API_KEY: emptyToUndefined(),
 
+  // Job boards (Reed, Adzuna)
+  REED_API_KEY: emptyToUndefined(),
+
   REFRESH_COOLDOWN_MINUTES: z.coerce.number().int().min(0).default(120),
 
   DATABASE_URL: z
