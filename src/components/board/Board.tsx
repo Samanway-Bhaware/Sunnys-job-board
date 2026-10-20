@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type BoardData } from "@/lib/client/api";
-import { ago, joinRoles, todayLondon, trimDot } from "@/lib/client/format";
+import { ago, todayLondon, trimDot } from "@/lib/client/format";
 import {
   ALL_TAB,
   ARCHIVED_TAB,
@@ -281,7 +281,7 @@ export default function Board() {
   const refreshing = run?.status === "running";
   const registerAvailable = data?.register.available ?? false;
   const filterCount = activeFilterCount(effectiveFilters);
-  const headline = roles.length ? `${joinRoles(roles.map((r) => r.name))} roles` : "Your job board";
+  const headline = "Communications, marketing, and business development roles";
   const subtitle = data ? `${trimDot(data.scope.sector)}. ${trimDot(data.scope.notes)}` : "Indexed from company career boards, deduplicated, and tagged by role, sponsorship and location.";
 
   /* ---------- actions ---------- */
