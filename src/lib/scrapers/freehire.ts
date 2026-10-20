@@ -320,12 +320,13 @@ export const freehireScraper: Scraper = {
         chunks.push([query.sector].filter(Boolean));
       }
 
-      const rawJobs: FreeHireJob[] = [];
-      for (const chunk of chunks) {
-        const params = buildSearchParams(query, chunk);
-        const batch = await fetchFreeHireSearch(baseUrl, apiKey, params);
-        rawJobs.push(...batch);
-      }
+      const rawBatches = await Promise.all(
+        chunks.map((chunk) => {
+          const params = buildSearchParams(query, chunk);
+          return fetchFreeHireSearch(baseUrl, apiKey, params);
+        }),
+      );
+      const rawJobs = rawBatches.flat();
 
       const seenSlugs = new Set<string>();
       const uniqueJobs: ScrapedJob[] = [];

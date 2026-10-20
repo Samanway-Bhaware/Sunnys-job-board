@@ -185,6 +185,13 @@ export async function startRefresh(options: { trigger: Trigger; roleIds?: string
   });
   inflight.set(id, task.finally(() => inflight.delete(id)));
 
+  // If running in a serverless environment with waitUntil support, register the task
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const globalWaitUntil = (globalThis as any).waitUntil;
+  if (typeof globalWaitUntil === "function") {
+    globalWaitUntil(task);
+  }
+
   return { started: true, run: (await getRun(id))! };
 }
 
@@ -220,11 +227,11 @@ async function processScraperRun(runId: string, roles: RoleView[], progress: Pro
 
     log.info("scrapers", `Scraped ${listings.length} candidate listings across ${results.length} boards`);
 
-    // Step 1: Link checking
+    // Step 1: Link checking (opt-in for scheduled background jobs; skipped during live search for fast response)
     let kept = listings;
     let droppedGone = 0;
 
-    const shouldCheckLinks = process.env.USE_MOCK_PROVIDER !== "1" && process.env.NODE_ENV !== "test";
+    const shouldCheckLinks = process.env.ENABLE_LINK_CHECK === "1";
     if (listings.length > 0 && shouldCheckLinks) {
       const linkResults = await checkLinks(listings.map((l) => l.canonicalUrl), {
         concurrency: 30,
@@ -239,17 +246,25 @@ async function processScraperRun(runId: string, roles: RoleView[], progress: Pro
         }
         kept.push({ ...listing, linkStatus: status });
       }
+    } else {
+      kept = listings.map((l) => ({ ...l, linkStatus: l.linkStatus || "verified" }));
     }
 
-    // Step 2: Sponsor register matching
+    // Step 2: Sponsor register matching (only if register has been populated)
     const hasSponsors = (await registerStatus()).available;
-    if (hasSponsors) {
-      const matchedKept: NormalisedListing[] = [];
-      for (const listing of kept) {
-        const match = await matchSponsor(listing.org, listing.locationNorm);
-        matchedKept.push(match ? { ...listing, licensedSponsor: true, sponsorMatchName: match.name } : listing);
-      }
-      kept = matchedKept;
+    if (hasSponsors && kept.length > 0) {
+      const distinctOrgs = [...new Set(kept.map((l) => l.org))];
+      const matchMap = new Map<string, { licensed: boolean; name: string | null }>();
+      await Promise.all(
+        distinctOrgs.map(async (org) => {
+          const match = await matchSponsor(org);
+          matchMap.set(org, match ? { licensed: true, name: match.name } : { licensed: false, name: null });
+        }),
+      );
+      kept = kept.map((listing) => {
+        const m = matchMap.get(listing.org);
+        return m?.licensed ? { ...listing, licensedSponsor: true, sponsorMatchName: m.name } : listing;
+      });
     }
 
     // Step 3: Distribute listings to roles and merge

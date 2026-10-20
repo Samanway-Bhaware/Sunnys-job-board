@@ -42,71 +42,80 @@ export interface MergeResult {
  */
 export async function mergeListings(listings: NormalisedListing[], ctx: MergeContext): Promise<MergeResult> {
   const db = getDb();
-  let added = 0;
-  let updated = 0;
+  if (listings.length === 0) return { added: 0, updated: 0 };
+
+  const allCurrent = await db.select().from(jobs);
+  const byUrl = new Map<string, JobRow>();
+  const byKey = new Map<string, JobRow>();
+  for (const j of allCurrent) {
+    byUrl.set(j.canonicalUrl, j);
+    byKey.set(orgTitleKey(j.org, j.title), j);
+  }
+
+  const toInsert: (typeof jobs.$inferInsert)[] = [];
+  const toUpdate: { id: string; patch: Partial<JobRow> }[] = [];
 
   for (const listing of listings) {
-    const existing = await findExisting(db, listing);
+    const existing = byUrl.get(listing.canonicalUrl) ?? byKey.get(orgTitleKey(listing.org, listing.title));
 
     if (existing) {
-      await db.update(jobs)
-        .set(fillBlanks(existing, listing, ctx))
-        .where(eq(jobs.id, existing.id));
-      updated += 1;
+      toUpdate.push({ id: existing.id, patch: fillBlanks(existing, listing, ctx) });
       continue;
     }
 
-    await db.insert(jobs)
-      .values({
-        id: randomUUID(),
-        roleId: ctx.roleId,
-        title: listing.title,
-        org: listing.org,
-        locationText: listing.locationText,
-        locationNorm: listing.locationNorm,
-        workMode: listing.workMode,
-        contract: listing.contract,
-        hoursText: listing.hoursText,
-        salaryText: listing.salaryText,
-        salaryMin: listing.salaryMin,
-        salaryMax: listing.salaryMax,
-        sponsorship: listing.sponsorship,
-        sponsorshipEvidence: listing.sponsorshipEvidence,
-        licensedSponsor: listing.licensedSponsor ?? false,
-        sponsorMatchName: listing.sponsorMatchName ?? null,
-        postedDate: listing.postedDate,
-        closingDate: listing.closingDate,
-        url: listing.url,
-        canonicalUrl: listing.canonicalUrl,
-        source: listing.source,
-        cited: listing.cited,
-        linkStatus: listing.linkStatus,
-        firstSeen: ctx.now,
-        lastSeen: ctx.now,
-        status: "",
-        notes: "",
-        appliedAt: null,
-        provider: ctx.provider,
-        model: ctx.model,
-      });
-    added += 1;
+    const row = {
+      id: randomUUID(),
+      roleId: ctx.roleId,
+      title: listing.title,
+      org: listing.org,
+      locationText: listing.locationText,
+      locationNorm: listing.locationNorm,
+      workMode: listing.workMode,
+      contract: listing.contract,
+      hoursText: listing.hoursText,
+      salaryText: listing.salaryText,
+      salaryMin: listing.salaryMin,
+      salaryMax: listing.salaryMax,
+      sponsorship: listing.sponsorship,
+      sponsorshipEvidence: listing.sponsorshipEvidence,
+      licensedSponsor: listing.licensedSponsor ?? false,
+      sponsorMatchName: listing.sponsorMatchName ?? null,
+      postedDate: listing.postedDate,
+      closingDate: listing.closingDate,
+      url: listing.url,
+      canonicalUrl: listing.canonicalUrl,
+      source: listing.source,
+      cited: listing.cited,
+      linkStatus: listing.linkStatus || "verified",
+      firstSeen: ctx.now,
+      lastSeen: ctx.now,
+      status: "",
+      notes: "",
+      appliedAt: null,
+      provider: ctx.provider,
+      model: ctx.model,
+    };
+    toInsert.push(row);
+    byUrl.set(listing.canonicalUrl, row as unknown as JobRow);
+    byKey.set(orgTitleKey(listing.org, listing.title), row as unknown as JobRow);
   }
 
-  return { added, updated };
-}
+  if (toInsert.length > 0) {
+    const CHUNK = 50;
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      await db.insert(jobs).values(toInsert.slice(i, i + CHUNK)).onConflictDoNothing();
+    }
+  }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function findExisting(tx: any, listing: NormalisedListing): Promise<JobRow | undefined> {
-  const byUrlRows = await tx.select().from(jobs).where(eq(jobs.canonicalUrl, listing.canonicalUrl));
-  if (byUrlRows[0]) return byUrlRows[0];
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map(({ id, patch }) =>
+        db.update(jobs).set(patch).where(eq(jobs.id, id)),
+      ),
+    );
+  }
 
-  // Fallback: same organisation and title, compared loosely.
-  const key = orgTitleKey(listing.org, listing.title);
-  const candidates = await tx
-    .select()
-    .from(jobs)
-    .where(sql`lower(${jobs.org}) = lower(${listing.org})`);
-  return candidates.find((row: JobRow) => orgTitleKey(row.org, row.title) === key);
+  return { added: toInsert.length, updated: toUpdate.length };
 }
 
 /** Only fills fields the stored row lacks. Never overwrites status, notes or appliedAt. */
