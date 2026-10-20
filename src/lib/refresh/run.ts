@@ -84,16 +84,36 @@ export function toRunView(row: RefreshRunRow): RunView {
   };
 }
 
+const inflight = new Map<string, Promise<void>>();
+
+async function reapOrphanedRun(row: RefreshRunRow): Promise<RefreshRunRow> {
+  if (
+    process.env.NODE_ENV !== "test" &&
+    row.status === "running" &&
+    !inflight.has(row.id) &&
+    Date.now() - row.startedAt > 25_000
+  ) {
+    const now = Date.now();
+    await getDb()
+      .update(refreshRuns)
+      .set({ status: "failed", error: "Search timed out.", finishedAt: now })
+      .where(eq(refreshRuns.id, row.id));
+    await releaseLock(row.id);
+    return { ...row, status: "failed", error: "Search timed out.", finishedAt: now };
+  }
+  return row;
+}
+
 export async function getRun(id: string): Promise<RunView | null> {
   const rows = await getDb().select().from(refreshRuns).where(eq(refreshRuns.id, id));
   const row = rows[0];
-  return row ? toRunView(row) : null;
+  return row ? toRunView(await reapOrphanedRun(row)) : null;
 }
 
 export async function latestRun(): Promise<RunView | null> {
   const rows = await getDb().select().from(refreshRuns).orderBy(desc(refreshRuns.startedAt)).limit(1);
   const row = rows[0];
-  return row ? toRunView(row) : null;
+  return row ? toRunView(await reapOrphanedRun(row)) : null;
 }
 
 async function writeProgress(runId: string, progress: Progress): Promise<void> {
@@ -106,8 +126,6 @@ async function writeProgress(runId: string, progress: Progress): Promise<void> {
 export async function currentUsage(): Promise<UsageView | null> {
   return usageFor("scrapers", false);
 }
-
-const inflight = new Map<string, Promise<void>>();
 
 export async function waitForRun(id: string): Promise<void> {
   await inflight.get(id);
@@ -190,6 +208,14 @@ export async function startRefresh(options: { trigger: Trigger; roleIds?: string
   const globalWaitUntil = (globalThis as any).waitUntil;
   if (typeof globalWaitUntil === "function") {
     globalWaitUntil(task);
+  }
+
+  // Outside unit tests, wait up to 4s so fast scrapes finish within the request itself
+  if (process.env.NODE_ENV !== "test") {
+    await Promise.race([
+      task,
+      new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+    ]);
   }
 
   return { started: true, run: (await getRun(id))! };

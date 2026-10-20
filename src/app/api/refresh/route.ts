@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { isResponse, protectedRoute, readJson } from "@/lib/api";
-import { startRefresh } from "@/lib/refresh/run";
+import { startRefresh, waitForRun } from "@/lib/refresh/run";
 
 export const dynamic = "force-dynamic";
 
@@ -16,5 +16,14 @@ export const POST = protectedRoute(async (request) => {
   if (isResponse(body)) return body;
 
   const result = await startRefresh({ trigger: body.trigger });
+  if (result.started) {
+    try {
+      after(async () => {
+        await waitForRun(result.run.id);
+      });
+    } catch {
+      // Outside Next.js request context (e.g. unit tests)
+    }
+  }
   return NextResponse.json({ ok: true, ...result }, { status: result.started ? 202 : 200 });
 });

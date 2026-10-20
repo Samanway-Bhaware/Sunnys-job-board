@@ -138,28 +138,42 @@ export default function Board() {
 
   /* ---------- loading ---------- */
 
-  const applyStart = useCallback((result: StartResult, manual: boolean) => {
-    if (result.started || result.reason === "running") {
-      runStartRef.current = result.run.startedAt;
-      setRun(result.run);
-      return;
-    }
-    if (result.reason === "cap") {
-      setError(`You've used all ${result.usage.cap} searches for today. The board still shows what it found earlier; searches reset tomorrow.`);
-    } else if (result.reason === "unavailable") {
-      setError(result.message);
-    } else if (result.reason === "no_roles") {
-      setError("There are no roles switched on to search for. Add one, or switch one on in Settings.");
-    } else if (result.reason === "cooldown" && manual) {
-      setNotice("Already up to date.");
-    }
-  }, []);
-
   const loadBoard = useCallback(async () => {
     const next = await api.board();
     setData(next);
     return next;
   }, []);
+
+  const applyStart = useCallback(
+    (result: StartResult, manual: boolean) => {
+      if (result.started || result.reason === "running") {
+        runStartRef.current = result.run.startedAt;
+        setRun(result.run);
+        if (result.run.status !== "running") {
+          void loadBoard().then((board) => {
+            const added = board.jobs.filter((j) => j.firstSeen >= runStartRef.current).length;
+            if (result.run.status === "failed") {
+              setNotice("");
+              setError("The search didn't finish. Your saved roles are still here. Select Refresh to try again.");
+            } else if (manual) {
+              setNotice(added === 0 ? "No new roles since the last search." : `${added} new role${added === 1 ? "" : "s"} added.`);
+            }
+          });
+        }
+        return;
+      }
+      if (result.reason === "cap") {
+        setError(`You've used all ${result.usage.cap} searches for today. The board still shows what it found earlier; searches reset tomorrow.`);
+      } else if (result.reason === "unavailable") {
+        setError(result.message);
+      } else if (result.reason === "no_roles") {
+        setError("There are no roles switched on to search for. Add one, or switch one on in Settings.");
+      } else if (result.reason === "cooldown" && manual) {
+        setNotice("Already up to date.");
+      }
+    },
+    [loadBoard],
+  );
 
   useEffect(() => {
     if (startedRef.current) return;

@@ -107,6 +107,28 @@ const BOOTSTRAP_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "sponsor_register_norm_idx" ON "sponsor_register" USING btree ("org_norm")`,
 ];
 
+function isConcurrentDdlError(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const err = current as { code?: string; constraint?: string; message?: string; cause?: unknown };
+    if (err.code === "42P07" || err.code === "23505") {
+      return true;
+    }
+    if (
+      typeof err.message === "string" &&
+      (err.message.includes("already exists") ||
+        err.message.includes("pg_type_typname_nsp_index") ||
+        err.message.includes("pg_class_relname_nsp_index"))
+    ) {
+      return true;
+    }
+    current = err.cause;
+  }
+  return false;
+}
+
 /**
  * Applies schema DDL idempotently. Safe to call on every server start,
  * in serverless cold starts (even without filesystem access to ./drizzle),
@@ -117,7 +139,13 @@ export async function runMigrations(): Promise<void> {
   const state = getDbState();
   const target = currentDbTarget();
   for (const stmt of BOOTSTRAP_STATEMENTS) {
-    await db.execute(sql.raw(stmt));
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (error) {
+      if (!isConcurrentDdlError(error)) {
+        throw error;
+      }
+    }
   }
   state.migratedTarget = target;
 }
@@ -126,12 +154,30 @@ export async function runMigrations(): Promise<void> {
  * Ensures schema DDL has been applied once for the active database target.
  */
 export async function ensureMigrated(): Promise<void> {
-  getDb(); // Ensures state.openedTarget is up to date
+  const db = getDb(); // Ensures state.openedTarget is up to date
   const state = getDbState();
   const target = currentDbTarget();
   if (state.migratedTarget === target) return;
   if (!state.migrationPromise) {
-    state.migrationPromise = runMigrations().finally(() => {
+    state.migrationPromise = (async () => {
+      // Fast-path for external Postgres (Neon): if tables already exist, skip 16 DDL statements
+      if (target !== ":memory:") {
+        try {
+          const check = await db.execute(
+            sql`SELECT to_regclass('public.jobs') AS jobs_reg, to_regclass('public.login_attempts') AS login_reg, to_regclass('public.usage_daily') AS usage_reg`,
+          );
+          const rows = (check as unknown as { rows?: Array<Record<string, unknown>> }).rows ?? (Array.isArray(check) ? check : []);
+          const first = rows[0] as Record<string, unknown> | undefined;
+          if (first && first.jobs_reg && first.login_reg && first.usage_reg) {
+            state.migratedTarget = target;
+            return;
+          }
+        } catch {
+          // Fall through to full DDL bootstrap
+        }
+      }
+      await runMigrations();
+    })().finally(() => {
       state.migrationPromise = null;
     });
   }

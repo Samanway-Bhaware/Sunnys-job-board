@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { isResponse, protectedRoute, readJson } from "@/lib/api";
 import { MAX_LEN } from "@/lib/jobs/types";
-import { startRefresh } from "@/lib/refresh/run";
+import { startRefresh, waitForRun } from "@/lib/refresh/run";
 import { createRole, listRoles, reorderRoles, toRoleView } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,15 @@ export const POST = protectedRoute(async (request) => {
 
   const role = await createRole(body);
   const search = await startRefresh({ trigger: "role_added", roleIds: [role.id] });
+  if (search.started) {
+    try {
+      after(async () => {
+        await waitForRun(search.run.id);
+      });
+    } catch {
+      // Outside Next.js request context (e.g. unit tests)
+    }
+  }
   return NextResponse.json(
     { ok: true, role: toRoleView(role), run: search.started ? search.run : null, search },
     { status: 201 },

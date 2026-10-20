@@ -47,7 +47,15 @@ const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
     .optional()
-    .transform((v) => (v ? stripWrappingQuotes(v) : undefined)),
+    .transform((v) => {
+      if (!v) return undefined;
+      let cleaned = stripWrappingQuotes(v);
+      if (cleaned.startsWith("psql ")) {
+        cleaned = stripWrappingQuotes(cleaned.slice(5));
+      }
+      cleaned = cleaned.replace(/^p+ostgres(ql)?:\/\//i, "postgresql://");
+      return cleaned || undefined;
+    }),
   DATABASE_PATH: z.string().optional(),
 
   // Optional: for triggering GitHub Actions refresh workflow from UI
